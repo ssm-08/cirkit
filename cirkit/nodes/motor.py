@@ -1,4 +1,5 @@
 import sys
+from collections import OrderedDict
 from cirkit.nodes.base import Node
 from cirkit.signal import Signal
 from cirkit import llm, confidence
@@ -76,16 +77,20 @@ class Motor(Node):
         all_signals = [s for signals in inputs.values() for s in signals if s is not Signal.ZERO]
         if any(s.contradiction >= 0.8 for s in all_signals):
             return self._call_llm(inputs, state)
-        cache = state.setdefault("cache", {})
+        cache = state.setdefault("cache", OrderedDict())
         key = tuple(
             s.content_hash()
             for role in sorted(inputs.keys())
             for s in inputs[role]
+            if s is not Signal.ZERO          # C1: filter sentinels from key
         )
         if key in cache:
+            cache.move_to_end(key)           # LRU: mark as recently used
             return cache[key]
         out = self._call_llm(inputs, state)
         cache[key] = out
+        if len(cache) > 64:                  # I2: evict oldest entry
+            cache.popitem(last=False)
         return out
 
     def step(self, inputs: dict, state: dict) -> Signal:

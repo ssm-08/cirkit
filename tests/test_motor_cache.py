@@ -111,3 +111,78 @@ def test_low_contradiction_after_cache_populated():
     motor._maybe_cached_step({"context": [sig]}, state)  # populates cache
     motor._maybe_cached_step({"context": [sig]}, state)  # cache hit
     assert motor.llm_call_count == 1
+
+
+# --- C1: Signal.ZERO filtering ---
+
+from unittest.mock import patch
+
+FIXED_OUTPUT2 = Signal(content="llm result 2", confidence=0.7)
+
+
+def test_c1_zero_in_inputs_does_not_cause_cache_miss():
+    """C1: Signal.ZERO in inputs must be filtered from cache key.
+
+    Call 1: inputs = {"context": [real_sig, Signal.ZERO]}
+    Call 2: inputs = {"context": [real_sig]}
+    Same effective content -> should be a cache HIT (only 1 LLM call).
+    """
+    real_sig = Signal(content="hello", confidence=0.7)
+    call_count = [0]
+
+    def fake_llm(prompt, timeout=60):
+        call_count[0] += 1
+        return 'result\n{"confidence": 0.8}'
+
+    with patch("cirkit.llm.call_claude", fake_llm):
+        from cirkit.nodes.motor import Motor
+        m = Motor({"system": "test"})
+        state = {}
+        m._maybe_cached_step({"context": [real_sig, Signal.ZERO]}, state)
+        m._maybe_cached_step({"context": [real_sig]}, state)
+        assert call_count[0] == 1, "Expected cache hit but got cache miss"
+
+
+def test_i2_motor_cache_bounded_at_64():
+    """I2: Motor cache must never exceed 64 entries."""
+    call_count = [0]
+
+    def fake_llm(prompt, timeout=60):
+        call_count[0] += 1
+        return f'result {call_count[0]}\n{{"confidence": 0.8}}'
+
+    with patch("cirkit.llm.call_claude", fake_llm):
+        from cirkit.nodes.motor import Motor
+        m = Motor({"system": "test"})
+        state = {}
+        # Feed 100 unique signals
+        for i in range(100):
+            sig = Signal(content=f"unique input {i}", confidence=0.7)
+            m._maybe_cached_step({"context": [sig]}, state)
+        assert len(state["cache"]) <= 64
+
+
+def test_i2_lru_eviction_oldest_entry():
+    """I2: When cache is full, oldest (LRU) entry is evicted."""
+    call_count = [0]
+
+    def fake_llm(prompt, timeout=60):
+        call_count[0] += 1
+        return f'out {call_count[0]}\n{{"confidence": 0.8}}'
+
+    with patch("cirkit.llm.call_claude", fake_llm):
+        from cirkit.nodes.motor import Motor
+        m = Motor({"system": "test"})
+        state = {}
+        # Fill cache to 64
+        sigs = [Signal(content=f"sig {i}", confidence=0.7) for i in range(64)]
+        for sig in sigs:
+            m._maybe_cached_step({"context": [sig]}, state)
+        initial_calls = call_count[0]
+        # Add one more — evicts oldest (sigs[0])
+        new_sig = Signal(content="sig 64", confidence=0.7)
+        m._maybe_cached_step({"context": [new_sig]}, state)
+        assert len(state["cache"]) == 64
+        # Accessing sigs[0] again should be a cache miss (evicted)
+        m._maybe_cached_step({"context": [sigs[0]]}, state)
+        assert call_count[0] == initial_calls + 2  # new_sig miss + sigs[0] re-miss
