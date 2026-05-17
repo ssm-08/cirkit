@@ -95,7 +95,3 @@ class Motor(Node):
 
     def step(self, inputs: dict, state: dict) -> Signal:
         return self._call_llm(inputs, state)
-
-
-from cirkit.nodes import NODE_REGISTRY
-NODE_REGISTRY["motor"] = Motor
