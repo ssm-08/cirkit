@@ -93,7 +93,7 @@ The unit of data flowing between nodes. Frozen struct — nodes read it, cannot 
 | `contradiction` | float [0,1] | How rejected/contradicted this signal is |
 | `urgency` | float [0,1] | Time-sensitivity |
 | `relevance` | float [0,1] | How on-task this signal is |
-| `flags` | dict | Engine control (`consensus_locked`, `needs_synthesis`) — excluded from equality/hash |
+| `flags` | MappingProxyType | Engine control (`consensus_locked`, `needs_synthesis`) — excluded from equality/hash; read-only (truly immutable) |
 
 `Signal.ZERO` is "nothing yet." Every node handles it gracefully as a no-op.
 
@@ -143,7 +143,7 @@ Every wire tells the receiving node **why** it's getting that signal. Motor asse
 Static source. Emits `config.content + user_prompt` at confidence=1.0 every iteration.
 
 ```json
-{ "id": "ctx", "type": "battery", "config": { "content": "Do the task.", "accumulate": false } }
+{ "id": "ctx", "type": "battery", "config": { "content": "Do the task." } }
 ```
 
 `accumulate: true` — appends incoming `feedback` signals across iterations. Use this when the battery should grow its context from what reviewers say.
@@ -176,7 +176,7 @@ Single-input threshold filter. Pass or block, no attenuation.
 
 `confidence >= threshold` → pass through. Below → `Signal.ZERO`.
 
-Use this before an AND-gate to drop low-quality signals before they can block consensus.
+Only use this when you need to raise the bar for one specific peer above the AND-gate's general threshold. If resistor threshold == gate threshold, the resistor is redundant — the gate already rejects low-confidence peers.
 
 ---
 
@@ -237,7 +237,7 @@ Branches on one input into N named outputs. Useful for routing easy prompts thro
 
 Rules: `by_confidence`, `by_content_length`, `by_flag`. First match wins; one branch must be `"default": true`.
 
-Router wires use `branch` instead of `role`:
+Router wires use `branch` instead of `role`. A Router wire must not have both `branch` and `role` fields:
 ```json
 { "from": "router", "to": "fast_motor", "branch": "fast" }
 ```
@@ -263,17 +263,19 @@ python -m cirkit run examples\resume_html.json "Name: Jane Doe. Job: ..."
 Use when multiple independent perspectives must agree before output advances.
 
 ```
-battery ──► reviewer_A ──peer──► AND-gate ──► sink
-        └──► reviewer_B ──peer──►
-                 ▲                   │
-                 └─────── feedback ──┘
+battery ──► reviewer_A ──peer──► AND-gate ──► synthesizer ──► sink
+        └──► reviewer_B ──peer──►                  │
+                 ▲                                  │
+                 └──────────── feedback ────────────┘
 ```
 
-Feedback wire: if AND-gate blocks, `contradiction=1.0` bypasses Motor cache → both reviewers revise → retry automatically.
+AND-gate passes when both reviewers exceed the confidence threshold. Synthesizer fuses the peer outputs into a coherent report. Feedback flows from synthesizer (meaningful content) back to reviewers — they refine against the fused result in the next iteration.
 
-**Key:** gate threshold should be 0.45–0.55. Too strict and `[BLOCKED]` flows as feedback content with no useful information.
+**Key:** gate threshold should be 0.45–0.55. Too strict and the gate blocks, sending `[BLOCKED]` as feedback with no useful information.
 
-Example: `examples/pr_review.json` — writer + security reviewer must agree.
+**Confidence = completeness, not outcome:** motor system prompts must rate confidence on how thorough the analysis is — not on whether issues were found. "Output HIGH confidence only if no issues found" breaks the gate on any real input that has problems.
+
+Example: `examples/pr_review.json` — writer + security reviewer → gate → synthesizer, synthesizer feedback to both motors.
 
 ### Pattern 3: Triage (cheap classifier + adaptive routing)
 Use when some inputs are trivial and don't need a full pipeline.
@@ -302,7 +304,7 @@ Trivial prompts skip the expensive path entirely.
 }
 ```
 
-Validation on load: epsilon ∈ (0, 1.0], max_iter ≥ 1, all wire endpoints exist, no duplicate node IDs, sink has no out-edges, roles ∈ `{context, feedback, peer}`.
+Validation on load: epsilon ∈ (0, 1.0], max_iter ≥ 1, all wire endpoints exist, no duplicate node IDs, sink has no out-edges, roles ∈ `{context, feedback, peer}`, Router wires must use `branch` (not `role`), required config fields (`battery` needs `content`; `and_gate`/`resistor` need `threshold`).
 
 ---
 
@@ -315,6 +317,8 @@ from cirkit.signal import Signal
 
 class MyNode(Node):
     def __init__(self, config: dict):
+        if "my_required_field" not in config:
+            raise ValueError("MyNode config requires 'my_required_field'")
         self.config = config
 
     def step(self, inputs: dict[str, list[Signal]], state: dict) -> Signal:
@@ -337,7 +341,7 @@ NODE_REGISTRY["my_node"] = MyNode
 ## Testing
 
 ```powershell
-python -m pytest tests/ -v                        # 115 tests, <1s, no LLM calls
+python -m pytest tests/ -v                        # 118 tests, <1s, no LLM calls
 python -m pytest tests/test_engine_no_motor.py -v # core thesis: engine works without Motor
 ```
 
@@ -366,15 +370,15 @@ cirkit/
     ├── router.py
     └── motor.py      # LLM node; overrides _maybe_cached_step with contradiction bypass
 
-tests/                # 92 unit tests — see test_engine_no_motor.py for core thesis proof
+tests/                # 118 unit tests — see test_engine_no_motor.py for core thesis proof
 examples/
 ├── pr_review.json    # Parallel reviewers + consensus + synthesizer
 └── resume_html.json  # Linear pipeline: drafter → HTML formatter
 ui/
 ├── index.html        # Visual circuit builder (standalone, no build step)
 ├── server.py         # stdlib dev server — python ui/server.py [port]
-├── circuit_utils.py  # shared: validate_circuit() + parse_cirkit_line(); used by server.py and views.py
-├── views.py          # Django views (StreamingHttpResponse, SSE ndjson)
+├── circuit_utils.py  # shared: validate_circuit() (incl. node config fields) + parse_cirkit_line(); used by server.py and views.py
+├── views.py          # Django views; validates circuit before streaming, returns 400 on errors
 └── urls.py           # Django URL config — mount at /cirkit/
 ```
 
