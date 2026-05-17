@@ -94,3 +94,95 @@ def test_i4_feedback_cycle_allowed():
         assert circuit is not None
     finally:
         os.unlink(path)
+
+
+def test_i7_accumulate_battery_no_feedback_warns():
+    """I7: Battery with accumulate=True but no feedback in-edge must emit UserWarning."""
+    data = {
+        "config": {"epsilon": 0.05, "max_iter": 3},
+        "sink": "out",
+        "nodes": [
+            {"id": "bat", "type": "battery", "config": {"content": "x", "accumulate": True}},
+            {"id": "out", "type": "sink", "config": {}},
+        ],
+        "wires": [
+            {"from": "bat", "to": "out", "role": "context"},
+            # no feedback wire into bat
+        ],
+    }
+    path = _write_tmp(data)
+    try:
+        with pytest.warns(UserWarning, match="accumulate.*no feedback"):
+            load_circuit(path)
+    finally:
+        os.unlink(path)
+
+
+def test_i7_accumulate_battery_with_feedback_no_warn():
+    """I7: Battery with accumulate=True AND a feedback in-edge must not warn."""
+    data = {
+        "config": {"epsilon": 0.05, "max_iter": 3},
+        "sink": "out",
+        "nodes": [
+            {"id": "bat", "type": "battery", "config": {"content": "x", "accumulate": True}},
+            {"id": "gate", "type": "and_gate", "config": {"threshold": 0.5, "early_exit_threshold": 0.99}},
+            {"id": "out", "type": "sink", "config": {}},
+        ],
+        "wires": [
+            {"from": "bat", "to": "gate", "role": "context"},
+            {"from": "gate", "to": "out", "role": "context"},
+            {"from": "gate", "to": "bat", "role": "feedback"},
+        ],
+    }
+    path = _write_tmp(data)
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            load_circuit(path)   # must not raise
+    finally:
+        os.unlink(path)
+
+
+def test_m6_unreachable_node_warns():
+    """M6: A node with no path to sink must emit UserWarning."""
+    data = {
+        "config": {"epsilon": 0.05, "max_iter": 3},
+        "sink": "out",
+        "nodes": [
+            {"id": "bat", "type": "battery", "config": {"content": "x", "accumulate": False}},
+            {"id": "orphan", "type": "resistor", "config": {"threshold": 0.5}},
+            {"id": "out", "type": "sink", "config": {}},
+        ],
+        "wires": [
+            {"from": "bat", "to": "out", "role": "context"},
+            # orphan has no out-edge reaching sink
+        ],
+    }
+    path = _write_tmp(data)
+    try:
+        with pytest.warns(UserWarning, match="no path to sink"):
+            load_circuit(path)
+    finally:
+        os.unlink(path)
+
+
+def test_m6_all_nodes_reachable_no_warn():
+    """M6: A fully-connected circuit must not warn about reachability."""
+    data = {
+        "config": {"epsilon": 0.05, "max_iter": 3},
+        "sink": "out",
+        "nodes": [
+            {"id": "bat", "type": "battery", "config": {"content": "x", "accumulate": False}},
+            {"id": "out", "type": "sink", "config": {}},
+        ],
+        "wires": [
+            {"from": "bat", "to": "out", "role": "context"},
+        ],
+    }
+    path = _write_tmp(data)
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            load_circuit(path)
+    finally:
+        os.unlink(path)

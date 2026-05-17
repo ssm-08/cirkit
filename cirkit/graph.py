@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json
+import warnings
 from dataclasses import dataclass, field
 
 from cirkit.nodes.battery import Battery
@@ -150,6 +151,35 @@ def load_circuit(path: str) -> Circuit:
         role_or_branch = wire.branch if wire.branch else wire.role
         in_edges[wire.to_id].append((wire.from_id, role_or_branch))
         out_edges[wire.from_id].append((wire.to_id, role_or_branch))
+
+    # I7: warn if accumulate battery has no feedback in-edge
+    for nid, node in nodes.items():
+        if isinstance(node, Battery) and node.config.get("accumulate", False):
+            has_feedback = any(role == "feedback" for _, role in in_edges.get(nid, []))
+            if not has_feedback:
+                warnings.warn(
+                    f"Battery '{nid}' has accumulate=True but no feedback in-edge — "
+                    f"accumulate mode has no effect",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
+    # M6: warn if any node has no path to sink (reverse BFS from sink)
+    reachable: set[str] = {sink_id}
+    queue = [sink_id]
+    while queue:
+        nid = queue.pop()
+        for src_id, _ in in_edges.get(nid, []):
+            if src_id not in reachable:
+                reachable.add(src_id)
+                queue.append(src_id)
+    for nid in nodes:
+        if nid not in reachable:
+            warnings.warn(
+                f"Node '{nid}' has no path to sink '{sink_id}' and will not affect the final output",
+                UserWarning,
+                stacklevel=2,
+            )
 
     return Circuit(
         nodes=nodes, wires=wires, sink_id=sink_id, config=cfg,
