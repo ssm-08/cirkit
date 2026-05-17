@@ -22,10 +22,11 @@ def main():
 
     result = cirkit.run(circuit, user_prompt, epsilon=epsilon, max_iter=max_iter)
 
+    final_delta = result.delta_history[-1] if result.delta_history else 0.0
     if result.converged:
-        print(f"[converged after {result.iterations} iter, final delta={result.delta_history[-1]:.4f}]")
+        print(f"[converged after {result.iterations} iter, final delta={final_delta:.4f}]")
     else:
-        print(f"[MAX_ITER (non-convergent) after {result.iterations} iter, final delta={result.delta_history[-1]:.4f}]")
+        print(f"[MAX_ITER (non-convergent) after {result.iterations} iter, final delta={final_delta:.4f}]")
 
     print(result.output.content)
 
