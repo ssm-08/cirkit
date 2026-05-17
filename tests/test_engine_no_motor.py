@@ -117,8 +117,7 @@ def test_nonconvergent_circuit_returns_false_not_raises():
     try:
         circuit = load_circuit(path)
         result = run(circuit, "prompt")
-        # Must not raise; just reports non-convergence
         assert isinstance(result, RunResult)
-        assert result.converged is False or result.converged is True  # either is valid
+        assert result.converged is False
     finally:
         os.unlink(path)

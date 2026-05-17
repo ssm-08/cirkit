@@ -47,8 +47,16 @@ def validate_circuit(circuit: dict) -> list[str]:
         errors.append(f"sink node '{sink_id}' must have type 'sink'")
 
     for nid, node in nodes.items():
-        if node.get("type") == "router":
-            errors.extend(_validate_router(nid, node.get("config", {})))
+        ntype = node.get("type")
+        cfg = node.get("config", {})
+        if ntype == "router":
+            errors.extend(_validate_router(nid, cfg))
+        elif ntype == "battery":
+            if "content" not in cfg:
+                errors.append(f"battery '{nid}' config requires 'content'")
+        elif ntype in ("and_gate", "resistor"):
+            if "threshold" not in cfg:
+                errors.append(f"{ntype} '{nid}' config requires 'threshold'")
 
     wires = circuit.get("wires", [])
     if not isinstance(wires, list):

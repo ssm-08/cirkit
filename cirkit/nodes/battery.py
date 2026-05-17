@@ -13,6 +13,8 @@ class Battery(Node):
     """
 
     def __init__(self, config: dict):
+        if "content" not in config:
+            raise ValueError("Battery config requires 'content'")
         self.config = config
 
     def step(self, inputs: dict, state: dict) -> Signal:

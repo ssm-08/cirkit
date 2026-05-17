@@ -2,7 +2,7 @@
   "config": { "epsilon": 0.05, "max_iter": 4 },
   "sink": "out",
   "nodes": [
-    { "id": "ctx",     "type": "battery", "config": { "content": "You are building a professional resume. Produce clean, complete output. Do not leave placeholders.", "accumulate": false } },
+    { "id": "ctx",     "type": "battery", "config": { "content": "You are building a professional resume. Produce clean, complete output. Do not leave placeholders." } },
     { "id": "drafter", "type": "motor",   "config": { "system": "Organize the user input into resume sections: Summary, Experience, Education, Skills. Output structured prose only, no HTML. Be specific — use the exact details given." } },
     { "id": "coder",   "type": "motor",   "config": { "system": "Convert the resume content into a single self-contained HTML file with inline CSS. Clean typography, white background, subtle section dividers. Output ONLY valid HTML — no explanation, no markdown fences." } },
     { "id": "out",     "type": "sink",    "config": {} }

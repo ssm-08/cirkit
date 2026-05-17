@@ -26,7 +26,16 @@ class Router(Node):
         self.branches = config["branches"]
 
     def step(self, inputs: dict, state: dict) -> Signal:
-        signal = inputs.get("context", [Signal.ZERO])[0] if inputs.get("context") else Signal.ZERO
+        context_inputs = inputs.get("context", [])
+        if len(context_inputs) > 1:
+            import warnings
+            warnings.warn(
+                f"Router received {len(context_inputs)} context inputs; only the first is used. "
+                f"Connect exactly one context wire to a Router.",
+                UserWarning,
+                stacklevel=3,
+            )
+        signal = context_inputs[0] if context_inputs else Signal.ZERO
 
         matched_name = self._match_branch(signal)
         state["routed_branch"] = matched_name

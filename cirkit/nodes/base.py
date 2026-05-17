@@ -29,6 +29,7 @@ class Node(ABC):
             s.content_hash()
             for role in sorted(inputs.keys())
             for s in inputs[role]
+            if s is not Signal.ZERO  # C1: filter sentinels — consistent with Motor cache
         )
         if state.get("_last_sig") == sig and "_last_out" in state:
             return state["_last_out"]

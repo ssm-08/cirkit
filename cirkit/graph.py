@@ -116,6 +116,11 @@ def load_circuit(path: str) -> Circuit:
             raise ValueError(f"Wire from Router '{from_id}' must have 'branch' field")
         if not is_router_src and has_branch:
             raise ValueError(f"Wire from non-Router '{from_id}' must not have 'branch' field")
+        if is_router_src and has_branch and has_role:
+            raise ValueError(
+                f"Wire from Router '{from_id}' must not have 'role' field "
+                f"(branch wires are not feedback/context edges)"
+            )
 
         role = w.get("role", "context")
         branch = w.get("branch")

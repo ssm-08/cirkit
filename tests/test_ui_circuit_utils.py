@@ -11,7 +11,7 @@ def base_circuit(**overrides):
         "config": {"epsilon": 0.05, "max_iter": 4},
         "sink": "out",
         "nodes": [
-            {"id": "src", "type": "battery", "config": {}},
+            {"id": "src", "type": "battery", "config": {"content": "test"}},
             {"id": "out", "type": "sink", "config": {}},
         ],
         "wires": [{"from": "src", "to": "out", "role": "context"}],
@@ -30,7 +30,7 @@ def test_validate_circuit_rejects_malformed_nodes_without_crashing():
 def test_validate_circuit_accepts_router_branch_wires():
     circuit = base_circuit(
         nodes=[
-            {"id": "src", "type": "battery", "config": {}},
+            {"id": "src", "type": "battery", "config": {"content": "test"}},
             {
                 "id": "route",
                 "type": "router",

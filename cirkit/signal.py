@@ -1,6 +1,7 @@
 from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import ClassVar
 
 
@@ -16,6 +17,10 @@ class Signal:
     # Two Signals with same content/metrics but different flags ARE considered equal.
     # Flags are engine-control metadata (e.g. consensus_locked), not content.
     flags: dict = field(default_factory=dict, compare=False, hash=False)
+
+    def __post_init__(self):
+        # Wrap flags in MappingProxyType so frozen=True is not bypassed by in-place mutation.
+        object.__setattr__(self, "flags", MappingProxyType(self.flags))
 
     ZERO: ClassVar["Signal"]  # sentinel — assigned after class def
 

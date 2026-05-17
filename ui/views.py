@@ -48,6 +48,10 @@ def run_circuit(request):
 
     clean_circuit = _strip_ui_fields(circuit)
 
+    errors = validate_circuit(clean_circuit)
+    if errors:
+        return JsonResponse({"valid": False, "errors": errors}, status=400)
+
     response = StreamingHttpResponse(
         _stream_cirkit(clean_circuit, prompt),
         content_type="text/event-stream",
