@@ -939,12 +939,12 @@ const MAX_IT = 8;
 const EPS    = 0.05;
 
 // ── State ───────────────────────────────────────────────────────
-let nodes=[], wires=[], sel=null, dragType=null, idN=1;
+let nodes=[], wires=[], sel=null, selWire=null, dragType=null, idN=1;
 let outTab_='log', inspTab_='node';
 let wireFrom=null, wireTo=null, tmpWire=null;
 let rs = mkRS();
 let dtrace=[], t0=null, going=false;
-let ticker=null;
+let ticker=null, abortCtrl=null, demoTimer=null;
 let zoom=1;
 const ZOOM_MIN=.25, ZOOM_MAX=2.5;
 
@@ -1414,7 +1414,7 @@ async function runCircuit() {
     }
   } catch(err) {
     if (err.name === 'AbortError') { abortCtrl = null; $('runbtn').disabled = false; return; }
-    // no backend reachable — fall through to demo mode
+    abortCtrl = null; // no backend reachable — fall through to demo mode
   }
 
   going = true; t0 = Date.now(); dtrace = [];
