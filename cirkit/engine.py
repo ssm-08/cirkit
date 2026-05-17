@@ -2,6 +2,7 @@ from cirkit.graph import Circuit
 from cirkit.state import RunState, RunResult
 from cirkit.signal import Signal
 from cirkit.convergence import aggregate_delta
+from cirkit.nodes.battery import Battery
 
 
 def run(circuit: Circuit, user_prompt: str, epsilon: float = None, max_iter: int = None) -> RunResult:
@@ -29,7 +30,7 @@ def run(circuit: Circuit, user_prompt: str, epsilon: float = None, max_iter: int
 
     # B. Inject user_prompt into Battery node states before bootstrap
     for nid, node in circuit.nodes.items():
-        if type(node).__name__ == "Battery":
+        if isinstance(node, Battery):
             state.node_state[nid]["user_prompt"] = user_prompt
 
     # C. Bootstrap: seed input-less nodes once before iter 0

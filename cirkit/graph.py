@@ -2,6 +2,10 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 
+from cirkit.nodes.battery import Battery
+from cirkit.nodes.sink import Sink
+from cirkit.nodes.router import Router
+
 
 @dataclass
 class Wire:
@@ -52,7 +56,7 @@ def load_circuit(path: str) -> Circuit:
 
     if sink_id not in nodes:
         raise ValueError(f"sink '{sink_id}' not in nodes")
-    if type(nodes[sink_id]).__name__ != "Sink":
+    if not isinstance(nodes[sink_id], Sink):
         raise ValueError(f"sink node '{sink_id}' must have type 'sink'")
 
     valid_roles = {"context", "feedback", "peer"}
@@ -67,7 +71,7 @@ def load_circuit(path: str) -> Circuit:
         if to_id not in nodes:
             raise ValueError(f"Wire to unknown node '{to_id}'")
 
-        is_router_src = type(nodes[from_id]).__name__ == "Router"
+        is_router_src = isinstance(nodes[from_id], Router)
         has_branch = "branch" in w
         has_role = "role" in w
 
@@ -88,7 +92,7 @@ def load_circuit(path: str) -> Circuit:
             branch_wire_pairs.add((from_id, to_id))
 
     for nid, node in nodes.items():
-        if type(node).__name__ == "Router":
+        if isinstance(node, Router):
             declared = {b["branch"] for b in node.branches}
             wired = {w.branch for w in wires if w.from_id == nid}
             for b in wired:
