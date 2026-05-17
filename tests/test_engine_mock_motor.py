@@ -1,3 +1,4 @@
+import pytest
 from unittest.mock import patch
 from cirkit.graph import load_circuit
 from cirkit.engine import run
@@ -37,8 +38,11 @@ def test_confidence_json_parsed():
 
 
 def test_confidence_hedge_cap():
+    # I5: hedge phrases do NOT cap explicit JSON confidence — only the fallback path is capped
     content, conf = parse_confidence('Actually I was wrong.\n{"confidence": 0.9}')
-    assert conf <= 0.5
+    assert conf == pytest.approx(0.9), (
+        "Explicit JSON confidence must not be capped by hedge phrases (I5)"
+    )
 
 
 def test_confidence_empty_string():
