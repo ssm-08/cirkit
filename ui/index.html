@@ -1625,6 +1625,16 @@ function stopCircuit() {
   unlockCanvas();
 }
 
+function lockCanvas() {
+  $('cwrap').classList.add('locked');
+  $('palette').classList.add('locked');
+}
+
+function unlockCanvas() {
+  $('cwrap').classList.remove('locked');
+  $('palette').classList.remove('locked');
+}
+
 function startTicker() {
   if (ticker) clearInterval(ticker);
   ticker=setInterval(()=>{
