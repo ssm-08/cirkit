@@ -1745,11 +1745,11 @@ makeVResizable('rh-bottom', 'obar', -1);
 // ── Example circuit ──────────────────────────────────────────────
 setTimeout(()=>{
   const defs=[
-    {type:'battery',  x:28,  y:100, label:'ctx'},
-    {type:'motor',    x:212, y:30,  label:'writer'},
-    {type:'motor',    x:212, y:162, label:'security'},
-    {type:'and_gate', x:404, y:96,  label:'gate', config:{threshold:.55,merge_mode:'synthesize'}},
-    {type:'sink',     x:564, y:96,  label:'out'},
+    {type:'battery',  x:28,  y:110, label:'prompt'},
+    {type:'motor',    x:220, y:30,  label:'writer',   config:{system:'You are a code writer. Produce clean, working code that satisfies the user prompt.'}},
+    {type:'motor',    x:220, y:175, label:'reviewer', config:{system:'You are a code reviewer. Your peer (writer) has produced code — review it for bugs, security issues, and quality. Reference the original prompt for context.'}},
+    {type:'and_gate', x:430, y:102, label:'gate',     config:{threshold:.55,merge_mode:'synthesize'}},
+    {type:'sink',     x:594, y:102, label:'out'},
   ];
   defs.forEach(d=>{
     const id=d.type+'_'+(idN++);
@@ -1758,6 +1758,7 @@ setTimeout(()=>{
   });
   [{from:'battery_1',to:'motor_2',role:'context'},
    {from:'battery_1',to:'motor_3',role:'context'},
+   {from:'motor_2',  to:'motor_3',role:'peer'},
    {from:'motor_2',  to:'and_gate_4',role:'peer'},
    {from:'motor_3',  to:'and_gate_4',role:'peer'},
    {from:'and_gate_4',to:'sink_5',role:'context'},
