@@ -724,6 +724,19 @@ select.fv {
   100% { background: var(--elev); border-color: var(--ln); }
 }
 .nfire { animation: nodefire .35s ease-out forwards; }
+
+/* ── Canvas lock ─────────────────────────────────────────────────────────────── */
+#cwrap.locked, #palette.locked {
+  pointer-events: none;
+  opacity: 0.65;
+  transition: opacity var(--tb);
+}
+
+/* ── Selected wire halo ──────────────────────────────────────── */
+.wire.sel-halo {
+  stroke-opacity: 0.28;
+  stroke-width: 6;
+}
 </style>
 </head>
 <body>
@@ -1120,7 +1133,7 @@ function drawWires() {
     const [x1,y1]=pc('po-'+w.from), [x2,y2]=pc('pi-'+w.to);
     if (!x1&&!y1) return;
     const d=bz(x1,y1,x2,y2);
-    const wr=wireRole(w), label=wireLabel(w);
+    const wr=wireRole(w);
     const active=going&&wr==='context';
     const path=document.createElementNS(NS,'path');
     path.setAttribute('d',d);
@@ -1128,13 +1141,6 @@ function drawWires() {
     const mkr=wr==='peer'?'ap':wr==='feedback'?'af':active?'aa':'ac';
     path.setAttribute('marker-end',`url(#${mkr})`);
     svg.appendChild(path);
-    if (label) {
-      const mx=(x1+x2)/2,my=(y1+y2)/2;
-      const t=document.createElementNS(NS,'text');
-      t.setAttribute('x',mx); t.setAttribute('y',my-6);
-      t.setAttribute('text-anchor','middle'); t.setAttribute('class','wlabel');
-      t.textContent=label; svg.appendChild(t);
-    }
     if (going) {
       const dur=wr==='feedback'?'1.8s':wr==='peer'?'1.3s':'1.1s';
       const circ=document.createElementNS(NS,'circle');
