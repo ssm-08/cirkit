@@ -1,5 +1,6 @@
 """R2: contradiction-triggered cache bypass — mock-based, no real LLM calls."""
 import pytest
+from unittest.mock import patch
 from cirkit.signal import Signal
 from cirkit.nodes.base import Node
 
@@ -114,10 +115,6 @@ def test_low_contradiction_after_cache_populated():
 
 
 # --- C1: Signal.ZERO filtering ---
-
-from unittest.mock import patch
-
-FIXED_OUTPUT2 = Signal(content="llm result 2", confidence=0.7)
 
 
 def test_c1_zero_in_inputs_does_not_cause_cache_miss():
