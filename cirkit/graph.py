@@ -26,6 +26,42 @@ class Circuit:
     branch_wire_pairs: set = field(default_factory=set)  # set of (from_id, to_id) that are branch wires
 
 
+def _check_structural_cycles(nodes: dict, wires: list) -> None:
+    """Raise ValueError if non-feedback wires form a directed cycle.
+
+    Feedback-role wires are intentional Jacobi back-edges and are excluded.
+    Uses iterative DFS (no recursion limit risk).
+    """
+    fwd: dict[str, list[str]] = {nid: [] for nid in nodes}
+    for wire in wires:
+        if wire.role != "feedback":
+            fwd[wire.from_id].append(wire.to_id)
+
+    WHITE, GRAY, BLACK = 0, 1, 2
+    color = {nid: WHITE for nid in nodes}
+
+    for start in list(nodes):
+        if color[start] != WHITE:
+            continue
+        stack = [(start, iter(fwd[start]))]
+        color[start] = GRAY
+        while stack:
+            nid, children = stack[-1]
+            try:
+                child = next(children)
+                if color[child] == GRAY:
+                    raise ValueError(
+                        f"Circuit has a structural cycle: '{nid}' → '{child}' "
+                        f"(use role='feedback' for intentional back-edges)"
+                    )
+                if color[child] == WHITE:
+                    color[child] = GRAY
+                    stack.append((child, iter(fwd[child])))
+            except StopIteration:
+                color[nid] = BLACK
+                stack.pop()
+
+
 def load_circuit(path: str) -> Circuit:
     """Load + validate JSON circuit definition."""
     from cirkit.nodes import NODE_REGISTRY
@@ -105,6 +141,8 @@ def load_circuit(path: str) -> Circuit:
     sink_out = [w for w in wires if w.from_id == sink_id]
     if sink_out:
         raise ValueError(f"Sink '{sink_id}' must have no out-edges")
+
+    _check_structural_cycles(nodes, wires)
 
     in_edges = {nid: [] for nid in nodes}
     out_edges = {nid: [] for nid in nodes}
