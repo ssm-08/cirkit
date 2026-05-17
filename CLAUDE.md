@@ -12,6 +12,7 @@ Signal circuit reasoning engine. Graph of stateful nodes propagate typed Signals
 - `cirkit/nodes/` — Battery, Sink, Resistor, AndGate, Router, Motor
 - `tests/` — 92 unit tests, all no-LLM except mock motor tests
 - `examples/pr_review.json` — canonical demo circuit (writer+security+synthesizer)
+- `examples/resume_html.json` — linear pipeline demo (drafter → HTML coder, no feedback loop)
 
 ## Setup
 - `pip install -e .` — installs `cirkit` CLI entry point; not required for `python -m cirkit`
@@ -35,6 +36,12 @@ Valid roles: `context` (default) | `feedback` | `peer`. Router wires use `branch
 - Blocked AND-Gate emits `contradiction=1.0` — NOT `Signal.ZERO` (triggers R2 cache bypass upstream)
 - Engine R9 bootstrap: inject `user_prompt` into Battery state BEFORE running input-less nodes
 - NODE_REGISTRY: populated in `nodes/__init__.py`; Motor added via `cirkit/__init__.py → import cirkit.nodes.motor`
+
+## Circuit design lessons
+- **Linear generation tasks** (resume, report, transform): use simple `battery → motor(s) → sink`. No feedback loop, no gate. Converges in 1–2 iter.
+- **Critic+gate feedback pitfall**: if critic system prompt says "output LOW confidence if issues found", gate blocks every iteration, sends `[BLOCKED: insufficient confidence]` as feedback content, upstream Motor gets useless signal and oscillates until MAX_ITER. Fix: lower gate threshold (0.45–0.55) OR remove critic+gate entirely for generation tasks.
+- **AND-gate threshold sweet spot**: 0.45–0.55 for most cases. Above 0.6 risks blocking oscillation on iterative refinement circuits.
+- **Feedback wire only useful when**: the signal flowing back is meaningful content (synthesizer output, critique text). Never useful when source is a blocked gate.
 
 ## Workflow
 When user says "clear", "ready to clear", or similar — before clearing, update CLAUDE.md, README.md, and any other context/doc files with learnings from the session (new patterns, gotchas, schema changes, node behavior, anything that helps future sessions).
