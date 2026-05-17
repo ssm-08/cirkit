@@ -4,12 +4,15 @@ CirKit dev server — no Django required.
 Usage:  python ui/server.py [port]     (default 8080)
 Open:   http://localhost:8080/
 """
-import json, os, subprocess, sys, tempfile
+import json, os, subprocess, sys, tempfile, threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
-ROOT   = Path(__file__).parent.parent   # project root (has cirkit/ package)
+ROOT   = Path(__file__).parent.parent
 UI_DIR = Path(__file__).parent
+sys.path.insert(0, str(UI_DIR))
+
+from circuit_utils import validate_circuit, parse_cirkit_line
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -28,7 +31,7 @@ class Handler(BaseHTTPRequestHandler):
         n = int(self.headers.get('Content-Length', 0))
         body = json.loads(self.rfile.read(n) or b'{}')
         if self.path == '/cirkit/validate/':
-            errors = _validate(body.get('circuit', {}))
+            errors = validate_circuit(body.get('circuit', {}))
             self._json({'valid': not errors, 'errors': errors})
         elif self.path == '/cirkit/run/':
             self._stream(body.get('circuit', {}), body.get('prompt', ''))
@@ -69,6 +72,7 @@ class Handler(BaseHTTPRequestHandler):
             json.dump(circuit, f, indent=2)
             tmp = f.name
 
+        proc = None
         try:
             env = {**os.environ,
                    'PYTHONPATH': str(ROOT) + os.pathsep + os.environ.get('PYTHONPATH', '')}
@@ -77,35 +81,40 @@ class Handler(BaseHTTPRequestHandler):
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 text=True, env=env, cwd=str(ROOT),
             )
+
+            stderr_lines = []
+            stderr_thread = threading.Thread(
+                target=lambda: stderr_lines.extend(
+                    l.rstrip('\n') for l in proc.stderr if l.strip()
+                )
+            )
+            stderr_thread.start()
+
             output = []
             for raw in proc.stdout:
                 line = raw.rstrip('\n')
-                if line.startswith('[converged') or line.startswith('[MAX_ITER'):
-                    ev = {'type': 'done',
-                          'converged': 'converged after' in line,
-                          'iter':  _int(line, 'after '),
-                          'delta': _float(line, 'delta=')}
-                elif line.startswith('[iter'):
-                    ev = {'type': 'iter',
-                          'iter':    _int(line, '[iter '),
-                          'delta':   _float(line, 'delta='),
-                          'message': line.split(']', 1)[-1].strip()}
+                ev = parse_cirkit_line(line)
+                if ev is not None:
+                    self._chunk(json.dumps(ev) + '\n')
                 else:
                     output.append(line)
-                    continue
-                self._chunk(json.dumps(ev) + '\n')
 
             if content := '\n'.join(output).strip():
                 self._chunk(json.dumps({'type': 'output', 'content': content}) + '\n')
 
-            for err in proc.stderr.read().splitlines():
-                if err.strip():
-                    self._chunk(json.dumps({'type': 'error', 'message': err}) + '\n')
+            stderr_thread.join()
+            for err in stderr_lines:
+                self._chunk(json.dumps({'type': 'error', 'message': err}) + '\n')
 
-            proc.wait()
         except Exception as ex:
             self._chunk(json.dumps({'type': 'error', 'message': str(ex)}) + '\n')
         finally:
+            if proc is not None:
+                try:
+                    proc.kill()
+                except OSError:
+                    pass
+                proc.wait()
             Path(tmp).unlink(missing_ok=True)
             self._end()
 
@@ -121,43 +130,6 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, fmt, *args):
         print(f'  {self.address_string()}  {fmt % args}')
-
-
-# ── validation (mirrors ui/views.py) ─────────────────────────────
-
-def _validate(circuit):
-    errors = []
-    cfg = circuit.get('config', {})
-    eps = cfg.get('epsilon')
-    if eps is None or not (0 < eps <= 1.0):
-        errors.append('config.epsilon must be in (0, 1.0]')
-    if not isinstance(cfg.get('max_iter'), int) or cfg['max_iter'] < 1:
-        errors.append('config.max_iter must be an integer >= 1')
-    nodes = {n['id']: n for n in circuit.get('nodes', [])}
-    if len(nodes) != len(circuit.get('nodes', [])):
-        errors.append('Duplicate node IDs')
-    sink = circuit.get('sink')
-    if not sink:
-        errors.append('sink is required')
-    elif sink not in nodes:
-        errors.append(f"sink '{sink}' not in nodes")
-    for w in circuit.get('wires', []):
-        if w.get('from') not in nodes:
-            errors.append(f"wire from unknown '{w.get('from')}'")
-        if w.get('to') not in nodes:
-            errors.append(f"wire to unknown '{w.get('to')}'")
-        if w.get('role', 'context') not in ('context', 'peer', 'feedback'):
-            errors.append(f"bad role '{w.get('role')}'")
-    return errors
-
-
-def _int(s, after):
-    try:    return int(s.split(after, 1)[1].split()[0].rstrip(','))
-    except: return None
-
-def _float(s, after):
-    try:    return float(s.split(after, 1)[1].split(']')[0].split()[0])
-    except: return None
 
 
 if __name__ == '__main__':

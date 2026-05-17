@@ -626,12 +626,12 @@ select.fv {
 
 #obody {
   flex: 1;
-  padding: 8px 14px;
   overflow-y: auto;
   font-size: 11px;
   color: var(--t2);
   line-height: 1.7;
 }
+#ob-log, #ob-out, #ob-json { padding: 8px 14px; }
 
 .lrow {
   display: grid;
@@ -709,6 +709,21 @@ select.fv {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--ln); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--ln2); }
+
+/* ── Active wire (running) ───────────────────────────────────── */
+.wire.context.active { stroke: #6FA1CC; }
+
+/* ── Signal pulses ───────────────────────────────────────────── */
+.wpulse.context  { fill: #6FA1CC; }
+.wpulse.peer     { fill: #6FB893; }
+.wpulse.feedback { fill: #C99955; }
+
+/* ── Node fire flash ─────────────────────────────────────────── */
+@keyframes nodefire {
+  0%   { background: color-mix(in srgb, var(--nc) 14%, var(--elev)); border-color: var(--nc); }
+  100% { background: var(--elev); border-color: var(--ln); }
+}
+.nfire { animation: nodefire .35s ease-out forwards; }
 </style>
 </head>
 <body>
@@ -871,9 +886,11 @@ select.fv {
     </div>
   </div>
   <div id="obody">
-    <div class="lrow" style="grid-template-columns:1fr">
-      <span style="color:var(--t3)">· no run yet · build a circuit and press RUN ·</span>
+    <div id="ob-log">
+      <div class="lrow" style="grid-template-columns:1fr"><span style="color:var(--t3)">· no run yet · build a circuit and press RUN ·</span></div>
     </div>
+    <div id="ob-out" style="display:none"></div>
+    <div id="ob-json" style="display:none"></div>
   </div>
   <div id="pbar">
     <span class="ppfx">▷</span>
@@ -891,7 +908,7 @@ select.fv {
   <div class="ropt ro-fb"   onclick="pickRole('feedback')"><span class="rdot"></span>FEEDBACK</div>
 </div>
 
-<div id="_oc" style="display:none"></div>
+
 
 <script>
 // ── Node definitions ────────────────────────────────────────────
@@ -914,6 +931,7 @@ let outTab_='log', inspTab_='node';
 let wireFrom=null, wireTo=null, tmpWire=null;
 let rs = mkRS();
 let dtrace=[], t0=null, going=false;
+let ticker=null;
 let zoom=1;
 const ZOOM_MIN=.25, ZOOM_MAX=2.5;
 
@@ -1062,10 +1080,14 @@ function pc(id) {
 function bz(x1,y1,x2,y2) { const cx=(x1+x2)/2; return `M${x1} ${y1} C${cx} ${y1} ${cx} ${y2} ${x2} ${y2}`; }
 
 function drawWires() {
+  const NS='http://www.w3.org/2000/svg';
   const svg=$('wsvg'); const tmp=tmpWire;
   svg.innerHTML=`<defs>
     <marker id="ac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
       <path d="M2 1L9 5L2 9" fill="none" stroke="#3A4256" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L9 5L2 9" fill="none" stroke="#6FA1CC" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
     </marker>
     <marker id="ap" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
       <path d="M2 1L9 5L2 9" fill="none" stroke="#6FB893" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1078,17 +1100,35 @@ function drawWires() {
   wires.forEach(w=>{
     const [x1,y1]=pc('po-'+w.from), [x2,y2]=pc('pi-'+w.to);
     if (!x1&&!y1) return;
-    const path=document.createElementNS('http://www.w3.org/2000/svg','path');
-    path.setAttribute('d',bz(x1,y1,x2,y2));
-    path.setAttribute('class','wire '+w.role);
-    path.setAttribute('marker-end',`url(#${w.role==='peer'?'ap':w.role==='feedback'?'af':'ac'})`);
+    const d=bz(x1,y1,x2,y2);
+    const active=going&&w.role==='context';
+    const path=document.createElementNS(NS,'path');
+    path.setAttribute('d',d);
+    path.setAttribute('class','wire '+w.role+(active?' active':''));
+    const mkr=w.role==='peer'?'ap':w.role==='feedback'?'af':active?'aa':'ac';
+    path.setAttribute('marker-end',`url(#${mkr})`);
     svg.appendChild(path);
     if (w.role!=='context') {
       const mx=(x1+x2)/2,my=(y1+y2)/2;
-      const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+      const t=document.createElementNS(NS,'text');
       t.setAttribute('x',mx); t.setAttribute('y',my-6);
       t.setAttribute('text-anchor','middle'); t.setAttribute('class','wlabel');
       t.textContent=w.role.toUpperCase(); svg.appendChild(t);
+    }
+    if (going) {
+      const dur=w.role==='feedback'?'1.8s':w.role==='peer'?'1.3s':'1.1s';
+      const circ=document.createElementNS(NS,'circle');
+      circ.setAttribute('class','wpulse '+w.role);
+      circ.setAttribute('r','2.2');
+      const anim=document.createElementNS(NS,'animateMotion');
+      anim.setAttribute('dur',dur);
+      anim.setAttribute('repeatCount','indefinite');
+      anim.setAttribute('path',d);
+      anim.setAttribute('keyPoints','0;1');
+      anim.setAttribute('keyTimes','0;1');
+      anim.setAttribute('calcMode','linear');
+      circ.appendChild(anim);
+      svg.appendChild(circ);
     }
   });
 }
@@ -1190,14 +1230,11 @@ function delNode(id) {
 function outTab(t) {
   outTab_=t;
   ['log','output','json'].forEach(x=>$('ot-'+x).classList.toggle('on',x===t));
-  const body=$('obody');
+  $('ob-log').style.display  = t==='log'    ? '' : 'none';
+  $('ob-out').style.display  = t==='output' ? '' : 'none';
+  $('ob-json').style.display = t==='json'   ? '' : 'none';
   if (t==='json') {
-    body.innerHTML=`<pre style="font-size:11px;white-space:pre-wrap;color:var(--t2)">${esc(JSON.stringify(circuitJSON(),null,2))}</pre>`;
-  } else if (t==='output') {
-    const c=$('_oc').textContent;
-    body.innerHTML=c
-      ?`<pre style="font-size:11.5px;white-space:pre-wrap;color:var(--t1);line-height:1.65">${esc(c)}</pre>`
-      :`<div class="lrow" style="grid-template-columns:1fr"><span style="color:var(--t3)">· no output yet ·</span></div>`;
+    $('ob-json').innerHTML=`<pre style="font-size:11px;white-space:pre-wrap;color:var(--t2)">${esc(JSON.stringify(circuitJSON(),null,2))}</pre>`;
   }
 }
 
@@ -1220,9 +1257,11 @@ function newCircuit() { clearCanvas(); }
 function clearCanvas() {
   nodes=[]; wires=[]; sel=null; idN=1;
   [...document.querySelectorAll('.cnode')].forEach(el=>el.remove());
-  $('wsvg').innerHTML=''; $('ehint').style.display=''; $('_oc').textContent='';
+  $('wsvg').innerHTML=''; $('ehint').style.display='';
   resetRS(); showNodeInsp(null);
-  $('obody').innerHTML='<div class="lrow" style="grid-template-columns:1fr"><span style="color:var(--t3)">· ready ·</span></div>';
+  $('ob-log').innerHTML='<div class="lrow" style="grid-template-columns:1fr"><span style="color:var(--t3)">· ready ·</span></div>';
+  $('ob-out').innerHTML=''; $('ob-json').innerHTML='';
+  outTab('log');
 }
 
 function exportJSON() {
@@ -1257,7 +1296,9 @@ function importJSON() {
 // ── Run state UI ─────────────────────────────────────────────────
 function resetRS() {
   rs=mkRS(); dtrace=[]; t0=null; going=false;
+  if (ticker) { clearInterval(ticker); ticker=null; }
   convUI('idle', null, 0); sbUI('IDLE', null, 0, null); traceSVG();
+  drawWires();
 }
 
 function convUI(state, delta, iter) {
@@ -1303,9 +1344,11 @@ async function runCircuit() {
   if (!nodes.length) { alert('Add some nodes first'); return; }
   if (going) return;
   going=true; t0=Date.now(); dtrace=[];
-  $('runbtn').disabled=true; $('_oc').textContent='';
+  $('runbtn').disabled=true;
   outTab('log');
-  const body=$('obody'); body.innerHTML='';
+  $('ob-log').innerHTML='';
+  $('ob-out').innerHTML='';
+  const body=$('ob-log');
   convUI('run',null,0); sbUI('RUNNING',null,0,0);
   rs=mkRS();
 
@@ -1316,6 +1359,8 @@ async function runCircuit() {
     if (vr.ok) { const vd=await vr.json(); if(!vd.valid){alert('Errors:\n'+vd.errors.join('\n'));done();return;} backend=true; }
   } catch(_) {}
 
+  startTicker();
+  drawWires();
   backend ? await runReal(body,cj,prompt) : runDemo(body);
 }
 
@@ -1348,8 +1393,19 @@ function handleEv(ev,body) {
     convUI('run',ev.delta,ev.iter); sbUI('RUNNING',ev.delta,ev.iter,ms);
     addLog(body,ev.iter,ev.message||'',ev.delta>EPS?'warn':'good',ev.delta);
     traceSVG();
+  } else if (ev.type==='node') {
+    if (!rs.ns[ev.id]) rs.ns[ev.id]={fires:0,c:0,contra:0};
+    const ns=rs.ns[ev.id];
+    ns.c=ev.conf; ns.contra=ev.contra;
+    if (!ev.cached) {
+      ns.fires=(ns.fires||0)+1;
+      rs.fired=(rs.fired||0)+1;
+      $('sb-f').textContent=rs.fired;
+    }
+    refreshNodeMeta(ev.id);
+    if (!ev.cached) flashNode(ev.id);
   } else if (ev.type==='output') {
-    $('_oc').textContent=ev.content;
+    $('ob-out').innerHTML=`<pre style="font-size:11.5px;white-space:pre-wrap;color:var(--t1);line-height:1.65">${esc(ev.content)}</pre>`;
   } else if (ev.type==='done') {
     rs.iter=ev.iter; rs.delta=ev.delta; rs.conv=ev.converged; rs.runtime=ms/1000;
     const st=ev.converged?'stable':'maxiter';
@@ -1386,13 +1442,44 @@ function runDemo(body) {
     convUI('run',s.delta,s.iter); sbUI('RUNNING',s.delta,s.iter,Date.now()-t0);
     addLog(body,s.iter,s.msg,s.delta>EPS?'warn':'good',s.delta);
     $('sb-f').textContent=nodes.length*s.iter; traceSVG();
+    flashNodes();
     if(inspTab_==='engine') showEngineInsp();
     i++; setTimeout(step,700);
   };
   setTimeout(step,200);
 }
 
-function done() { going=false; $('runbtn').disabled=false; }
+function done() {
+  going=false;
+  $('runbtn').disabled=false;
+  if (ticker) { clearInterval(ticker); ticker=null; }
+  drawWires();
+}
+
+function startTicker() {
+  if (ticker) clearInterval(ticker);
+  ticker=setInterval(()=>{
+    if (!going) { clearInterval(ticker); ticker=null; return; }
+    $('sb-t').textContent=((Date.now()-t0)/1000).toFixed(2)+'S';
+  },100);
+}
+
+function flashNode(id) {
+  const el=document.getElementById('nd-'+id); if(!el) return;
+  const nf=el.querySelector('.nfires');
+  if (nf) {
+    nf.textContent='FIRE';
+    nf.style.color='var(--nc)';
+    setTimeout(()=>{ nf.textContent='×'+((rs.ns[id]&&rs.ns[id].fires)||0); nf.style.color=''; },220);
+  }
+  el.classList.remove('nfire');
+  void el.offsetWidth;
+  el.classList.add('nfire');
+}
+
+function flashNodes() {
+  nodes.filter(n=>n.type!=='battery'&&n.type!=='sink').forEach(n=>flashNode(n.id));
+}
 
 // ── Log ─────────────────────────────────────────────────────────
 function addLog(body,iter,msg,cls,delta,badge) {

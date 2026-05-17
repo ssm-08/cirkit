@@ -70,6 +70,9 @@ python ui/server.py 9000     # custom port
 - Canvas zoom via scroll wheel or +/−/⌂ overlay (25%–250%)
 - Resizable palette, inspector, and output panel (drag the 4px dividers)
 - RUN button streams live iteration events from the engine; output and log tabs show results
+- Live node updates: fires counter (`×N`), confidence (`c=`), FIRE flash per iteration
+- Signal pulses animate along wires while running; active wires highlighted by role color
+- Runtime ticker counts elapsed seconds independently of event arrival
 - Export / Import circuit JSON; demo mode works with no backend
 
 **Node types in UI:** battery, motor, resistor, and_gate, router, sink  
@@ -334,7 +337,7 @@ NODE_REGISTRY["my_node"] = MyNode
 ## Testing
 
 ```powershell
-python -m pytest tests/ -v                        # 92 tests, <1s, no LLM calls
+python -m pytest tests/ -v                        # 115 tests, <1s, no LLM calls
 python -m pytest tests/test_engine_no_motor.py -v # core thesis: engine works without Motor
 ```
 
@@ -370,6 +373,7 @@ examples/
 ui/
 ├── index.html        # Visual circuit builder (standalone, no build step)
 ├── server.py         # stdlib dev server — python ui/server.py [port]
+├── circuit_utils.py  # shared: validate_circuit() + parse_cirkit_line(); used by server.py and views.py
 ├── views.py          # Django views (StreamingHttpResponse, SSE ndjson)
 └── urls.py           # Django URL config — mount at /cirkit/
 ```
@@ -379,9 +383,17 @@ ui/
 ## Output
 
 ```
-[converged after N iter, final delta=0.XXXX]
+[iter 1, delta=0.4821]
+[node battery_1 c=1.0000 x=0.0000 k=1]
+[node motor_2   c=0.8500 x=0.0000 k=0]
+[node sink_3    c=0.0000 x=0.0000 k=1]
+[iter 2, delta=0.0000]
+...
+[converged after 2 iter, final delta=0.0000]
 <sink content>
 ```
+
+Per-node fields: `c=` confidence · `x=` contradiction · `k=1` cached (step() skipped) / `k=0` fired (step() called).
 
 Non-convergent (hit max_iter):
 ```

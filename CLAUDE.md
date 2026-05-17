@@ -10,18 +10,19 @@ Signal circuit reasoning engine. Graph of stateful nodes propagate typed Signals
 ## Project layout
 - `cirkit/` — core engine (signal, convergence, graph, engine, llm, confidence)
 - `cirkit/nodes/` — Battery, Sink, Resistor, AndGate, Router, Motor
-- `tests/` — 92 unit tests, all no-LLM except mock motor tests
+- `tests/` — 115 unit tests, all no-LLM except mock motor tests
 - `examples/pr_review.json` — canonical demo circuit (writer+security+synthesizer)
 - `examples/resume_html.json` — linear pipeline demo (drafter → HTML coder, no feedback loop)
 - `ui/index.html` — standalone circuit builder UI (single file, no build step)
 - `ui/server.py` — stdlib dev server (no Django); run: `python ui/server.py [port]` default 8080
 - `ui/views.py` + `ui/urls.py` — Django integration (StreamingHttpResponse, SSE-style ndjson)
+- `ui/circuit_utils.py` — shared parse/validate logic imported by both server.py and views.py
 
 ## Setup
 - `pip install -e .` — installs `cirkit` CLI entry point; not required for `python -m cirkit`
 
 ## Commands
-- `python -m pytest tests/ -v` — run all 92 tests (fast, <1s, no LLM calls)
+- `python -m pytest tests/ -v` — run all 115 tests (fast, <1s, no LLM calls)
 - `python -m pytest tests/test_engine_no_motor.py -v` — core thesis proof
 - `python -m cirkit run examples\pr_review.json "<prompt>"` — end-to-end (needs claude CLI)
 - `python ui/server.py` — dev UI at http://localhost:8080/ (no Django needed)
@@ -60,9 +61,15 @@ When user says "clear", "ready to clear", or similar — before clearing, update
 - All canvas coordinate math divides by `zoom` — drop, drag, portCenter, wire drawing
 - Resizable panels: drag 4px `.rhandle` (sides) or `.hhandle` (bottom bar); palette/inspector 120–400px, output 60–500px
 - Backend wiring: `POST /cirkit/validate/` → validates JSON; `POST /cirkit/run/` → streams ndjson events
-- Event types from server: `{type:"iter"}`, `{type:"output"}`, `{type:"done"}`, `{type:"error"}`
+- Event types from server: `{type:"iter"}`, `{type:"node"}`, `{type:"output"}`, `{type:"done"}`, `{type:"error"}`
+- `node` event: `{type:"node", id, conf, contra, cached}` — emitted per-node per-iter; drives live card updates
 - Demo mode fallback: if `/cirkit/validate/` unreachable, runs 4-iter simulation (no backend needed)
 - `server.py` sets PYTHONPATH to project root so `cirkit` package is importable without install
+- Output drawer: three persistent sub-divs `#ob-log / #ob-out / #ob-json` — `outTab()` shows/hides, never clears
+- Signal pulses: `<animateMotion>` SVG circles per wire while running; colored by role (context=steel-blue, peer=teal, feedback=amber)
+- Node fire flash: `color-mix(in srgb, var(--nc) 14%, ...)` background + 'FIRE' label for 220ms when `k=0` (step() called, not cached)
+- Runtime ticker: `setInterval` 100ms updates elapsed time in statebar independently of event arrival
+- `circuit_utils.py` shared by server.py and views.py — `validate_circuit()` + `parse_cirkit_line()` (handles iter/node/done/converged lines)
 
 ## Windows gotchas
 - **Unicode in print()**: Windows PowerShell defaults to CP1252 — avoid non-ASCII chars in server startup prints. Use `->` not `→`. If needed, set `PYTHONIOENCODING=utf-8`.

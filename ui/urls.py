@@ -5,7 +5,7 @@ from . import views
 urlpatterns = [
     path("",         views.circuit_page,    name="cirkit-ui"),
     path("run/",     views.run_circuit,     name="cirkit-run"),
-    path("validate/",views.validate_circuit,name="cirkit-validate"),
+    path("validate/",views.validate_circuit_view,name="cirkit-validate"),
 ]
 
 # In your project's main urls.py:

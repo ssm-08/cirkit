@@ -20,7 +20,13 @@ def main():
     epsilon = circuit.config.get("epsilon", 0.05)
     max_iter = circuit.config.get("max_iter", 10)
 
-    result = cirkit.run(circuit, user_prompt, epsilon=epsilon, max_iter=max_iter)
+    def _on_iter(it, delta, node_info):
+        print(f"[iter {it}, delta={delta:.4f}]", flush=True)
+        for nid, info in node_info.items():
+            k = 1 if info["cached"] else 0
+            print(f"[node {nid} c={info['conf']:.4f} x={info['contra']:.4f} k={k}]", flush=True)
+
+    result = cirkit.run(circuit, user_prompt, epsilon=epsilon, max_iter=max_iter, on_iter=_on_iter)
 
     final_delta = result.delta_history[-1] if result.delta_history else 0.0
     if result.converged:

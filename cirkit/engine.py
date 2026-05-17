@@ -5,7 +5,7 @@ from cirkit.convergence import aggregate_delta
 from cirkit.nodes.battery import Battery
 
 
-def run(circuit: Circuit, user_prompt: str, epsilon: float = None, max_iter: int = None) -> RunResult:
+def run(circuit: Circuit, user_prompt: str, epsilon: float = None, max_iter: int = None, on_iter=None) -> RunResult:
     """Synchronous Jacobi update loop.
 
     Phases:
@@ -65,6 +65,17 @@ def run(circuit: Circuit, user_prompt: str, epsilon: float = None, max_iter: int
         state.outputs = new_outputs
         state.delta_history.append(agg)
 
+        if on_iter is not None:
+            node_info = {
+                nid: {
+                    "conf":   new_outputs[nid].confidence,
+                    "contra": new_outputs[nid].contradiction,
+                    "cached": new_outputs[nid] is prev_outputs[nid],
+                }
+                for nid in circuit.nodes
+            }
+            on_iter(it + 1, agg, node_info)
+
         # R10: convergence check from iter 0
         if agg < epsilon:
             converged = True
@@ -87,7 +98,7 @@ def run(circuit: Circuit, user_prompt: str, epsilon: float = None, max_iter: int
 
     return RunResult(
         output=final,
-        iterations=state.iteration + 1,  # +1 because iteration is 0-indexed; valid since max_iter >= 1
+        iterations=state.iteration + 1,
         converged=converged,
         delta_history=state.delta_history,
         all_outputs=state.outputs,
