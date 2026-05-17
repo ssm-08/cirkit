@@ -38,6 +38,8 @@ class Router(Node):
         return Signal.ZERO
 
     def _match_branch(self, signal: Signal) -> str:
+        # Branches evaluated in JSON declaration order; first non-default match wins.
+        # Place higher-priority branches before lower-priority ones in the circuit JSON.
         default_name: str | None = None
 
         if self.rule == "by_confidence":

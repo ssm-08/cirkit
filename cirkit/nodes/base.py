@@ -19,11 +19,11 @@ class Node(ABC):
         raise NotImplementedError
 
     def _maybe_cached_step(self, inputs: dict[str, list[Signal]], state: dict) -> Signal:
-        """Lazy step cache for deterministic nodes per R12.
+        """Single-slot lazy cache for deterministic nodes (R12).
 
-        Cache key: tuple of content_hash() for all signals, sorted by role then order.
-        Same inputs -> return cached output without calling step() again.
-        Motor overrides this entirely (R2 contradiction bypass + its own cache logic).
+        Stores only the MOST RECENT (input-sig, output) pair — not a full history.
+        Same inputs as last call -> return cached output; any change -> call step() again.
+        Motor overrides this entirely (R2 bypass + multi-entry OrderedDict cache).
         """
         sig = tuple(
             s.content_hash()
