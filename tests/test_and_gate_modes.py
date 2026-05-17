@@ -87,6 +87,22 @@ def test_early_exit_not_set_below_threshold():
     assert "consensus_locked" not in out.flags
 
 
+def test_m3_non_standard_roles_deterministic_regardless_of_dict_order():
+    """M3: Merge content must be identical regardless of non-standard role insertion order."""
+    from cirkit.nodes.and_gate import AndGate
+    from cirkit.signal import Signal
+
+    gate = AndGate({"threshold": 0.5, "early_exit_threshold": 0.99, "merge_mode": "concat"})
+    s_apple = Signal(content="apple", confidence=0.8)
+    s_zebra = Signal(content="zebra", confidence=0.8)
+
+    out1 = gate.step({"z_role": [s_zebra], "a_role": [s_apple]}, {})
+    out2 = gate.step({"a_role": [s_apple], "z_role": [s_zebra]}, {})
+    assert out1.content == out2.content, (
+        f"Merge content differs by dict insertion order:\n{out1.content!r}\nvs\n{out2.content!r}"
+    )
+
+
 def test_metrics_are_min_of_inputs():
     g = make_gate("concat", threshold=0.5)
     s1 = Signal(content="a", confidence=0.8, contradiction=0.2, urgency=0.6, relevance=0.9)

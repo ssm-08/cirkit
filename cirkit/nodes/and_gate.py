@@ -46,9 +46,9 @@ class AndGate(Node):
 
         # Also catch any other roles not in the standard set
         standard = {"context", "peer", "feedback"}
-        for role, sigs in inputs.items():
+        for role in sorted(inputs.keys()):
             if role not in standard:
-                ordered.extend(s for s in sigs if s is not Signal.ZERO)
+                ordered.extend(s for s in inputs[role] if s is not Signal.ZERO)
 
         if not ordered:
             return _BLOCKED
