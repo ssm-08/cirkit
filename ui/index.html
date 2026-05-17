@@ -1506,6 +1506,7 @@ async function runReal(body,cj,prompt) {
       method:'POST',
       headers:{'Content-Type':'application/json','X-CSRFToken':cookie('csrftoken')},
       body:JSON.stringify({circuit:strip(cj),prompt}),
+      signal: abortCtrl ? abortCtrl.signal : undefined,
     });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const rd=r.body.getReader(), dec=new TextDecoder(); let buf='';
@@ -1517,7 +1518,9 @@ async function runReal(body,cj,prompt) {
         try{ handleEv(JSON.parse(l),body); } catch{ addLog(body,'?',l,''); }
       }
     }
-  } catch(err){ addLog(body,'!','Connection error: '+err.message,'warn'); }
+  } catch(err){
+    if (err.name !== 'AbortError') addLog(body,'!','Connection error: '+err.message,'warn');
+  }
   done();
 }
 
@@ -1560,18 +1563,19 @@ function handleEv(ev,body) {
 function runDemo(body) {
   const steps=[
     {iter:1,delta:.4821,msg:'Battery seed propagating · motor nodes computing'},
-    {iter:2,delta:.1810,msg:'AND gate: 2 inputs ≥ θ — passing · synthesizer fires'},
+    {iter:2,delta:.1810,msg:'AND gate: 2 inputs >= theta -- passing · synthesizer fires'},
     {iter:3,delta:.0623,msg:'Feedback dampens contradictions · cache bypass on writer'},
-    {iter:4,delta:.0091,msg:'Δ below ε — locking consensus'},
+    {iter:4,delta:.0091,msg:'Delta below epsilon -- locking consensus'},
   ];
   let i=0;
   const step=()=>{
+    if (!going) return;
     if (i>=steps.length) {
       const l=steps[steps.length-1];
       rs.iter=l.iter; rs.delta=l.delta; rs.conv=true;
       rs.fired=nodes.length*4; rs.runtime=(Date.now()-t0)/1000;
       convUI('stable',l.delta,l.iter); sbUI('STABLE',l.delta,l.iter,Date.now()-t0);
-      addLog(body,l.iter,'converged · Δ='+l.delta.toFixed(4)+' < ε='+EPS,'good',null,'STABLE');
+      addLog(body,l.iter,'converged · delta='+l.delta.toFixed(4)+' < eps='+EPS,'good',null,'STABLE');
       $('sb-f').textContent=rs.fired; traceSVG();
       if(inspTab_==='engine') showEngineInsp();
       done(); return;
@@ -1583,16 +1587,42 @@ function runDemo(body) {
     $('sb-f').textContent=nodes.length*s.iter; traceSVG();
     flashNodes();
     if(inspTab_==='engine') showEngineInsp();
-    i++; setTimeout(step,700);
+    i++;
+    demoTimer=setTimeout(step,700);
   };
-  setTimeout(step,200);
+  demoTimer=setTimeout(step,200);
 }
 
 function done() {
-  going=false;
-  $('runbtn').disabled=false;
-  if (ticker) { clearInterval(ticker); ticker=null; }
+  going = false;
+  abortCtrl = null; demoTimer = null;
+  if (ticker) { clearInterval(ticker); ticker = null; }
+  setRunBtn(false);
+  unlockCanvas();
   drawWires();
+}
+
+function setRunBtn(running) {
+  const btn = $('runbtn');
+  if (running) {
+    btn.innerHTML = '&#9632;&nbsp; STOP';
+    btn.onclick = stopCircuit;
+    btn.disabled = false;
+  } else {
+    btn.innerHTML = '&#9655;&nbsp; RUN';
+    btn.onclick = runCircuit;
+    btn.disabled = false;
+  }
+}
+
+function stopCircuit() {
+  if (abortCtrl) { abortCtrl.abort(); abortCtrl = null; }
+  if (demoTimer) { clearTimeout(demoTimer); demoTimer = null; }
+  going = false;
+  if (ticker) { clearInterval(ticker); ticker = null; }
+  resetRS();
+  setRunBtn(false);
+  unlockCanvas();
 }
 
 function startTicker() {
