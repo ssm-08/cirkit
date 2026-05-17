@@ -56,6 +56,17 @@ def test_aggregate_delta_same_signals_zero():
     assert aggregate_delta({"a": s}, {"a": s}) == 0.0
 
 
+def test_m1_aggregate_delta_key_mismatch_raises():
+    """M1: aggregate_delta with mismatched dicts must raise AssertionError."""
+    from cirkit.convergence import aggregate_delta
+    from cirkit.signal import Signal
+    s = Signal(content="x", confidence=0.5)
+    prev = {"a": s, "b": s}
+    curr = {"a": s}          # missing "b"
+    with pytest.raises(AssertionError):
+        aggregate_delta(prev, curr)
+
+
 def test_aggregate_delta_mean_of_multiple():
     s1 = Signal(content="a")
     s2 = Signal(content="b")

@@ -19,4 +19,8 @@ def aggregate_delta(prev_outputs: dict, curr_outputs: dict) -> float:
     """Mean delta across all nodes. Empty dict returns 0.0."""
     if not prev_outputs:
         return 0.0
+    assert prev_outputs.keys() == curr_outputs.keys(), (
+        f"aggregate_delta: key mismatch — "
+        f"prev={set(prev_outputs)} curr={set(curr_outputs)}"
+    )
     return sum(delta(prev_outputs[n], curr_outputs[n]) for n in prev_outputs) / len(prev_outputs)
