@@ -1594,6 +1594,7 @@ function runDemo(body) {
 }
 
 function done() {
+  if (!going) return;
   going = false;
   abortCtrl = null; demoTimer = null;
   if (ticker) { clearInterval(ticker); ticker = null; }
