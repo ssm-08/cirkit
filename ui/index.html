@@ -1168,10 +1168,10 @@ function selectNode(id) {
 }
 
 function deselect(e) {
-  if (e.target.id!=='canvas') return;
-  sel=null;
-  document.querySelectorAll('.cnode').forEach(el=>el.classList.remove('sel'));
-  if (inspTab_==='node') showNodeInsp(null);
+  if (e.target.id !== 'canvas' && e.target.id !== 'wsvg') return;
+  sel = null; selWire = null;
+  document.querySelectorAll('.cnode').forEach(el => el.classList.remove('sel'));
+  if (inspTab_ === 'node') showNodeInsp(null);
 }
 
 // ── Inspector tabs ──────────────────────────────────────────────
@@ -1385,29 +1385,50 @@ function traceSVG() {
 
 // ── Run ─────────────────────────────────────────────────────────
 async function runCircuit() {
-  const prompt=$('pinput').value.trim();
+  const prompt = $('pinput').value.trim();
   if (!prompt)       { alert('Enter a prompt first'); return; }
   if (!nodes.length) { alert('Add some nodes first'); return; }
   if (going) return;
-  going=true; t0=Date.now(); dtrace=[];
-  $('runbtn').disabled=true;
-  outTab('log');
-  $('ob-log').innerHTML='';
-  $('ob-out').innerHTML='';
-  const body=$('ob-log');
-  convUI('run',null,0); sbUI('RUNNING',null,0,0);
-  rs=mkRS();
 
-  const cj=circuitJSON();
-  let backend=false;
+  $('runbtn').disabled = true; // block double-click during validation
+
+  const cj = circuitJSON();
+  abortCtrl = new AbortController();
+  let backend = false;
   try {
-    const vr=await fetch(`${CIRKIT}/validate/`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({circuit:strip(cj)})});
-    if (vr.ok) { const vd=await vr.json(); if(!vd.valid){alert('Errors:\n'+vd.errors.join('\n'));done();return;} backend=true; }
-  } catch(_) {}
+    const vr = await fetch(`${CIRKIT}/validate/`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({circuit: strip(cj)}),
+      signal: abortCtrl.signal,
+    });
+    if (vr.ok) {
+      const vd = await vr.json();
+      if (!vd.valid) {
+        alert('Errors:\n' + vd.errors.join('\n'));
+        abortCtrl = null;
+        $('runbtn').disabled = false;
+        return;
+      }
+      backend = true;
+    }
+  } catch(err) {
+    if (err.name === 'AbortError') { abortCtrl = null; $('runbtn').disabled = false; return; }
+    // no backend reachable — fall through to demo mode
+  }
 
+  going = true; t0 = Date.now(); dtrace = [];
+  outTab('log');
+  $('ob-log').innerHTML = '';
+  $('ob-out').innerHTML = '';
+  const body = $('ob-log');
+  convUI('run', null, 0); sbUI('RUNNING', null, 0, 0);
+  rs = mkRS();
+  setRunBtn(true);
+  lockCanvas();
   startTicker();
   drawWires();
-  backend ? await runReal(body,cj,prompt) : runDemo(body);
+  backend ? await runReal(body, cj, prompt) : runDemo(body);
 }
 
 async function runReal(body,cj,prompt) {
