@@ -73,6 +73,7 @@ def test_early_exit_iterations_small():
 
 # ── G14: early exit blocked when Sink has no path from consensus-locked gate ───
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_g14_guard_no_path_to_sink():
     """consensus_locked fires but Sink has no in-edges — R4 must NOT trigger early exit."""
     data = {
@@ -99,6 +100,7 @@ def test_g14_guard_no_path_to_sink():
         os.unlink(path)
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")
 def test_g14_guard_sink_blocked_content_not_real():
     """BLOCKED signal in Sink (confidence=0) does not count as real content for G14."""
     # Battery → Resistor(threshold=0.9) → Gate(early_exit=0.3) → Sink

@@ -87,7 +87,7 @@ def run(circuit: Circuit, user_prompt: str, epsilon: float = None, max_iter: int
 
     return RunResult(
         output=final,
-        iterations=state.iteration + 1,
+        iterations=state.iteration + 1,  # +1 because iteration is 0-indexed; valid since max_iter >= 1
         converged=converged,
         delta_history=state.delta_history,
         all_outputs=state.outputs,
