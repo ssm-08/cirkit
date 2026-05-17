@@ -19,7 +19,7 @@ def test_battery_emits_content_and_user_prompt():
 def test_battery_missing_user_prompt():
     b = Battery({"content": "base", "accumulate": False})
     out = b.step({}, {})
-    assert out.content == "base\n"
+    assert out.content == "base"        # no trailing newline when prompt absent
     assert out.confidence == 1.0
 
 

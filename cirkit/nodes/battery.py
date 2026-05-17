@@ -16,7 +16,8 @@ class Battery(Node):
         self.config = config
 
     def step(self, inputs: dict, state: dict) -> Signal:
-        content = self.config["content"] + "\n" + state.get("user_prompt", "")
+        user_prompt = state.get("user_prompt", "")
+        content = self.config["content"] + ("\n" + user_prompt if user_prompt else "")
 
         if self.config.get("accumulate", False):
             feedback = [
