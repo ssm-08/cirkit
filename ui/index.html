@@ -731,12 +731,6 @@ select.fv {
   opacity: 0.65;
   transition: opacity var(--tb);
 }
-
-/* ── Selected wire halo ──────────────────────────────────────── */
-.wire.sel-halo {
-  stroke-opacity: 0.28;
-  stroke-width: 6;
-}
 </style>
 </head>
 <body>
@@ -1206,7 +1200,11 @@ function deselect(e) {
 function inspTab(t) {
   inspTab_=t;
   ['node','engine'].forEach(x=>$('it-'+x).classList.toggle('on',x===t));
-  t==='node' ? showNodeInsp(sel) : showEngineInsp();
+  if (t==='node') {
+    selWire !== null ? showWireInsp(selWire) : showNodeInsp(sel);
+  } else {
+    showEngineInsp();
+  }
 }
 
 function showNodeInsp(id) {
