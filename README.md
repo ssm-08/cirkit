@@ -1,6 +1,10 @@
 # CirKit
 
+[![CI](https://github.com/ssm-08/cirkit/actions/workflows/ci.yml/badge.svg)](https://github.com/ssm-08/cirkit/actions/workflows/ci.yml)
+
 A signal circuit reasoning engine. You define a graph of nodes in JSON. Signals flow through the graph until outputs stop changing. The LLM is one node type — not the orchestrator.
+
+**[Documentation](https://ssm-08.github.io/cirkit/)**
 
 ---
 

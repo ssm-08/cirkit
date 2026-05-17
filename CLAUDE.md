@@ -111,6 +111,13 @@ When user says "clear", "ready to clear", or similar — before clearing, update
 - **Unicode in print()**: Windows PowerShell defaults to CP1252 — avoid non-ASCII chars in server startup prints. Use `->` not `→`. If needed, set `PYTHONIOENCODING=utf-8`.
 - **server.py background job**: `serve_forever()` blocks the terminal — that's normal, not a hang.
 
+## Docsite & CI infrastructure
+- `mkdocs.yml` + `docs/` — MkDocs Material docsite; 15 pages (index + 5 concepts + 5 guides + 4 reference)
+- Install docs deps: `pip install -e ".[docs]"` → then `mkdocs serve` or `mkdocs build --strict`
+- `.github/workflows/ci.yml` — Python 3.11/3.12/3.13 matrix, `python -m pytest tests/ -v`; no coverage gating, no lint
+- `.github/workflows/docs.yml` — triggers on push to master when `docs/**` or `mkdocs.yml` changes; deploys to GitHub Pages
+- Python 3.14 has no GitHub Actions runner — CI matrix stops at 3.13
+
 ## Read tool quirk
 After writing files, use `Bash cat` to read externally-modified versions — `Read` tool returns stale content after a `Write`.
 

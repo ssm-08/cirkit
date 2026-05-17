@@ -12,5 +12,10 @@ dependencies = []
 [project.scripts]
 cirkit = "cirkit.__main__:main"
 
+[project.optional-dependencies]
+docs = [
+  "mkdocs-material>=9.5",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

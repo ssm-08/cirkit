@@ -1,0 +1,54 @@
+site_name: CirKit
+site_description: Signal circuit reasoning engine
+repo_url: https://github.com/ssm-08/cirkit
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.tabs
+    - toc.integrate
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Concepts:
+      - Signals: concepts/signals.md
+      - Nodes: concepts/nodes.md
+      - Engine Loop: concepts/engine.md
+      - Convergence: concepts/convergence.md
+      - Wire Roles: concepts/wires.md
+  - Guides:
+      - Quickstart: guides/quickstart.md
+      - Circuit Design Patterns: guides/circuit-design.md
+      - Adding a Node Type: guides/adding-nodes.md
+      - UI Canvas: guides/ui.md
+      - Django Integration: guides/django.md
+  - Reference:
+      - JSON Schema: reference/json-schema.md
+      - Node Config: reference/node-config.md
+      - Python API: reference/api.md
+      - CLI: reference/cli.md
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.details
+  - attr_list
