@@ -29,12 +29,26 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         n = int(self.headers.get('Content-Length', 0))
-        body = json.loads(self.rfile.read(n) or b'{}')
+        try:
+            body = json.loads(self.rfile.read(n) or b'{}')
+        except json.JSONDecodeError:
+            self._send(400, 'application/json', b'{"error": "Invalid JSON body"}')
+            return
+
         if self.path == '/cirkit/validate/':
             errors = validate_circuit(body.get('circuit', {}))
             self._json({'valid': not errors, 'errors': errors})
         elif self.path == '/cirkit/run/':
-            self._stream(body.get('circuit', {}), body.get('prompt', ''))
+            circuit = body.get('circuit')
+            prompt = body.get('prompt', '')
+            if not circuit or not prompt:
+                self._send(400, 'application/json', b'{"error": "circuit and prompt are required"}')
+                return
+            errors = validate_circuit(circuit)
+            if errors:
+                self._send(400, 'application/json', json.dumps({'valid': False, 'errors': errors}).encode())
+                return
+            self._stream(circuit, prompt)
         else:
             self._send(404, 'text/plain', b'not found')
 
