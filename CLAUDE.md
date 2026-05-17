@@ -55,6 +55,8 @@ Valid roles: `context` (default) | `feedback` | `peer`. Router wires use `branch
 - **Convergence epsilon is topology-dependent**: `aggregate_delta` is a mean across ALL nodes. Constant-output nodes (Sink always Signal.ZERO) dilute the aggregate. In a 5-node circuit with 1 active Motor, effective sensitivity is ~1/5 of the motor's actual delta. Tune epsilon relative to the fraction of actively-changing nodes.
 - **`accumulate: false` is redundant**: Battery's `accumulate` defaults to `False` — no need to set it explicitly in JSON.
 - **Feedback wire only useful when**: the signal flowing back is meaningful content (synthesizer output, critique text). Never useful when source is a blocked gate.
+- **AND gate ignores wire role**: AndGate.step() collects ALL non-ZERO inputs regardless of role (context/peer/feedback treated identically). Wire role on motor→gate wires is purely semantic/documentary — no functional difference between `peer` and `context` for gate inputs.
+- **Reviewer needs peer wire from writer**: In writer+reviewer circuits, battery→reviewer gives task context but reviewer CANNOT see the written content without a `writer→reviewer (peer)` wire. Always add this wire or reviewer has nothing to review.
 
 ## Workflow
 When user says "clear", "ready to clear", or similar — before clearing, update CLAUDE.md, README.md, and any other context/doc files with learnings from the session (new patterns, gotchas, schema changes, node behavior, anything that helps future sessions).
@@ -79,6 +81,31 @@ When user says "clear", "ready to clear", or similar — before clearing, update
 - Runtime ticker: `setInterval` 100ms updates elapsed time in statebar independently of event arrival
 - `circuit_utils.py` shared by server.py and views.py — `validate_circuit()` + `parse_cirkit_line()` (handles iter/node/done/converged lines); validates node config fields (battery requires `content`, and_gate/resistor require `threshold`)
 - `views.py` `run_circuit` validates circuit via `validate_circuit()` BEFORE spawning subprocess — returns 400 JSON on errors
+
+## UI state variables (key)
+- `sel` — selected node id (string or null)
+- `selWire` — selected wire index into `wires[]` (int or null); cleared in selectNode, deselect, delNode, setBranches, clearCanvas
+- `going` — true while circuit is running
+- `abortCtrl` — AbortController instance during run (nulled on done/stop/error)
+- `demoTimer` — setTimeout ID for demo mode steps (enables cancellation)
+- `ticker` — setInterval ID for elapsed-time counter
+
+## UI wire selection system
+- `drawWires()` appends transparent 12px hit paths (`pointer-events:all`) LAST — overrides `#wsvg { pointer-events:none }` per-element; collects in `hits[]` array then appends after all visual paths
+- Selected wire renders halo (6px semi-transparent role-colored path) + thicker stroke (2.5px)
+- `selectWire(i)` — sets selWire, clears node selection, redraws, calls showWireInsp(i)
+- `showWireInsp(i)` — inspector shows From/To (readonly), role `<select>` (non-branch) or branch (readonly), Delete button
+- `setWireRole(i, role)` — mutates wires[i].role, redraws
+- `delWire(i)` — splice + null selWire + redraw + reset inspector
+- `inspTab()` restores wire inspector on tab round-trip: `selWire !== null ? showWireInsp(selWire) : showNodeInsp(sel)`
+
+## UI run lifecycle
+- Validation happens BEFORE setting RUNNING state — if invalid, button re-enabled, status stays unchanged
+- `runCircuit()`: disable button → create AbortController → validate → (on pass) set going=true + RUNNING UI + setRunBtn(true) + lockCanvas() → run
+- `done()`: guarded with `if (!going) return` to prevent double-invocation when stopCircuit() fires before runReal()/runDemo() exit
+- `stopCircuit()`: abort + clear demoTimer + going=false + clear ticker + resetRS() + setRunBtn(false) + unlockCanvas()
+- `setRunBtn(running)`: swaps button label/onclick between RUN and STOP
+- `lockCanvas()` / `unlockCanvas()`: toggle `.locked` class on `#cwrap` and `#palette` (CSS: pointer-events:none + opacity:0.65)
 
 ## Windows gotchas
 - **Unicode in print()**: Windows PowerShell defaults to CP1252 — avoid non-ASCII chars in server startup prints. Use `->` not `→`. If needed, set `PYTHONIOENCODING=utf-8`.
