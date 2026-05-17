@@ -86,7 +86,7 @@ def validate_circuit_view(request):
 def _strip_ui_fields(circuit: dict) -> dict:
     stripped = dict(circuit)
     stripped["nodes"] = [
-        {k: v for k, v in n.items() if k not in ("x", "y", "selected")}
+        {k: v for k, v in n.items() if k not in ("x", "y", "label", "selected")}
         for n in circuit.get("nodes", [])
     ]
     return stripped
