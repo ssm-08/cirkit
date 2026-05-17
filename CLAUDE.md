@@ -13,6 +13,9 @@ Signal circuit reasoning engine. Graph of stateful nodes propagate typed Signals
 - `tests/` — 92 unit tests, all no-LLM except mock motor tests
 - `examples/pr_review.json` — canonical demo circuit (writer+security+synthesizer)
 - `examples/resume_html.json` — linear pipeline demo (drafter → HTML coder, no feedback loop)
+- `ui/index.html` — standalone circuit builder UI (single file, no build step)
+- `ui/server.py` — stdlib dev server (no Django); run: `python ui/server.py [port]` default 8080
+- `ui/views.py` + `ui/urls.py` — Django integration (StreamingHttpResponse, SSE-style ndjson)
 
 ## Setup
 - `pip install -e .` — installs `cirkit` CLI entry point; not required for `python -m cirkit`
@@ -21,6 +24,7 @@ Signal circuit reasoning engine. Graph of stateful nodes propagate typed Signals
 - `python -m pytest tests/ -v` — run all 92 tests (fast, <1s, no LLM calls)
 - `python -m pytest tests/test_engine_no_motor.py -v` — core thesis proof
 - `python -m cirkit run examples\pr_review.json "<prompt>"` — end-to-end (needs claude CLI)
+- `python ui/server.py` — dev UI at http://localhost:8080/ (no Django needed)
 
 ## JSON circuit schema (quick ref)
 `config`: `{epsilon, max_iter}` | `sink`: node id | `nodes`: `[{id, type, config}]` | `wires`: `[{from, to, role}]`
@@ -45,6 +49,24 @@ Valid roles: `context` (default) | `feedback` | `peer`. Router wires use `branch
 
 ## Workflow
 When user says "clear", "ready to clear", or similar — before clearing, update CLAUDE.md, README.md, and any other context/doc files with learnings from the session (new patterns, gotchas, schema changes, node behavior, anything that helps future sessions).
+
+## UI architecture
+- Single-file app (`ui/index.html`) — all CSS/JS inline, no build step, no dependencies except Google Fonts
+- Design tokens: JetBrains Mono (dominant), IBM Plex Sans (prose), Outfit 700 (wordmark)
+- Implemented node types in UI: battery, motor, resistor, and_gate, router, sink
+- NOT implemented (greyed out, `.off` class): or_gate, xor_gate
+- Wire roles: context (gray solid) | peer (teal solid) | feedback (amber dashed)
+- Canvas zoom: mouse wheel or +/−/⌂ overlay (bottom-left); range 25%–250%; `transform: scale(zoom)` on `#canvas`
+- All canvas coordinate math divides by `zoom` — drop, drag, portCenter, wire drawing
+- Resizable panels: drag 4px `.rhandle` (sides) or `.hhandle` (bottom bar); palette/inspector 120–400px, output 60–500px
+- Backend wiring: `POST /cirkit/validate/` → validates JSON; `POST /cirkit/run/` → streams ndjson events
+- Event types from server: `{type:"iter"}`, `{type:"output"}`, `{type:"done"}`, `{type:"error"}`
+- Demo mode fallback: if `/cirkit/validate/` unreachable, runs 4-iter simulation (no backend needed)
+- `server.py` sets PYTHONPATH to project root so `cirkit` package is importable without install
+
+## Windows gotchas
+- **Unicode in print()**: Windows PowerShell defaults to CP1252 — avoid non-ASCII chars in server startup prints. Use `->` not `→`. If needed, set `PYTHONIOENCODING=utf-8`.
+- **server.py background job**: `serve_forever()` blocks the terminal — that's normal, not a hang.
 
 ## Read tool quirk
 After writing files, use `Bash cat` to read externally-modified versions — `Read` tool returns stale content after a `Write`.

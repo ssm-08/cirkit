@@ -54,6 +54,31 @@ python -m cirkit run hello.json "What is the capital of France?"
 
 ---
 
+## UI
+
+A visual circuit builder is included. No build step — single HTML file.
+
+```powershell
+python ui/server.py          # starts at http://localhost:8080/
+python ui/server.py 9000     # custom port
+```
+
+**Features:**
+- Drag nodes from palette onto canvas
+- Draw wires between ports; pick role (context / peer / feedback) on drop
+- Click node to inspect and configure (label, system prompt, threshold, merge mode)
+- Canvas zoom via scroll wheel or +/−/⌂ overlay (25%–250%)
+- Resizable palette, inspector, and output panel (drag the 4px dividers)
+- RUN button streams live iteration events from the engine; output and log tabs show results
+- Export / Import circuit JSON; demo mode works with no backend
+
+**Node types in UI:** battery, motor, resistor, and_gate, router, sink  
+**Greyed out (not yet implemented):** or_gate, xor_gate
+
+**Django integration:** `ui/views.py` + `ui/urls.py` for production use via StreamingHttpResponse. Serves the same `index.html` at `GET /cirkit/` and streams at `POST /cirkit/run/`.
+
+---
+
 ## Signal
 
 The unit of data flowing between nodes. Frozen struct — nodes read it, cannot mutate it.
@@ -342,6 +367,11 @@ tests/                # 92 unit tests — see test_engine_no_motor.py for core t
 examples/
 ├── pr_review.json    # Parallel reviewers + consensus + synthesizer
 └── resume_html.json  # Linear pipeline: drafter → HTML formatter
+ui/
+├── index.html        # Visual circuit builder (standalone, no build step)
+├── server.py         # stdlib dev server — python ui/server.py [port]
+├── views.py          # Django views (StreamingHttpResponse, SSE ndjson)
+└── urls.py           # Django URL config — mount at /cirkit/
 ```
 
 ---

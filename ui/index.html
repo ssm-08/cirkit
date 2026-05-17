@@ -1,0 +1,1499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CirKit — Signal Runtime</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=Outfit:wght@700&display=swap" rel="stylesheet">
+<style>
+/* ── Tokens ─────────────────────────────────────────────────── */
+:root {
+  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+  --sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --display: 'Outfit', system-ui, sans-serif;
+
+  --bg:      #07090F;
+  --canvas:  #0B0F18;
+  --panel:   #10141E;
+  --elev:    #161B27;
+  --input:   #0B0F18;
+
+  --ln:      #232A3A;   /* line default */
+  --ln2:     #3A4256;   /* line strong */
+  --ln3:     #5B6480;   /* line active */
+
+  --t1: #E4ECF7;
+  --t2: #94A0B5;
+  --t3: #5C6680;
+  --tdim: #3B4254;
+  --tdanger: #D17A60;
+
+  --pri:     #7C84C8;
+  --pri2:    #9098D6;
+  --pri-e:   rgba(124,132,200,.42);
+  --pri-s:   rgba(124,132,200,.10);
+
+  --c-source: #9890C2;
+  --c-reason: #6FB893;
+  --c-filter: #C99955;
+  --c-gate:   #C97F61;
+  --c-branch: #6FA1CC;
+  --c-drain:  #A4ACBF;
+
+  --s-idle:   #5C6680;
+  --s-pulse:  #9098D6;
+  --s-active: #6FA1CC;
+  --s-stable: #6FB893;
+  --s-warn:   #C99955;
+  --s-block:  #C97F61;
+
+  --r1: 3px; --r2: 5px; --r3: 8px;
+  --tf: .12s ease; --tb: .2s ease;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--t1);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Shell ───────────────────────────────────────────────────── */
+#app { display: flex; flex-direction: column; height: 100vh; }
+
+/* ── Top bar ─────────────────────────────────────────────────── */
+#topbar {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  gap: 0;
+  background: var(--panel);
+  border-bottom: 1px solid var(--ln);
+  flex-shrink: 0;
+  z-index: 20;
+}
+
+.logotype {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -.04em;
+  color: var(--t1);
+  white-space: nowrap;
+}
+.logotype em { font-style: normal; color: var(--pri); }
+
+.tb-sub {
+  font-size: 9px;
+  color: var(--t3);
+  text-transform: uppercase;
+  letter-spacing: .14em;
+  margin-left: 10px;
+  padding-left: 10px;
+  border-left: 1px solid var(--ln);
+}
+
+/* Convergence module */
+#conv-mod {
+  display: flex;
+  align-items: stretch;
+  height: 34px;
+  background: var(--input);
+  border: 1px solid var(--ln);
+  border-radius: var(--r2);
+  overflow: hidden;
+  margin: 0 auto;
+}
+.cc {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+  min-width: 72px;
+}
+.cc.wide { min-width: 116px; }
+.cdiv { width: 1px; background: var(--ln); }
+.clabel {
+  font-size: 9px;
+  color: var(--t3);
+  text-transform: uppercase;
+  letter-spacing: .14em;
+  font-weight: 500;
+  margin-bottom: 1px;
+}
+.cval {
+  font-size: 14px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.01em;
+  color: var(--t1);
+  line-height: 1;
+  transition: color var(--tb);
+}
+.cval.good { color: var(--s-stable); }
+.cval.warn { color: var(--s-warn); }
+
+.cstatus {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .10em;
+}
+.sdot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--s-idle);
+  transition: background var(--tb);
+  flex-shrink: 0;
+}
+.sdot.run    { background: var(--s-warn);  animation: blink 1s ease-in-out infinite; }
+.sdot.stable { background: var(--s-stable); }
+.sdot.maxiter{ background: var(--s-warn); }
+
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+.tb-spacer { flex: 1; }
+.tb-sep { width: 1px; height: 20px; background: var(--ln); margin: 0 8px; }
+.tb-btn {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--t2);
+  background: transparent;
+  border: 1px solid var(--ln);
+  border-radius: var(--r2);
+  padding: 5px 10px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin-left: 5px;
+  transition: color var(--tf), border-color var(--tf), background var(--tf);
+  white-space: nowrap;
+}
+.tb-btn:hover { color: var(--t1); border-color: var(--ln2); background: var(--elev); }
+.tb-btn.danger:hover { color: var(--tdanger); border-color: rgba(209,122,96,.4); }
+
+/* ── State bar ───────────────────────────────────────────────── */
+#statebar {
+  height: 26px;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--ln);
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--t3);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  gap: 0;
+}
+.sb-item { padding: 0 10px; display: flex; align-items: center; gap: 6px; }
+.sb-item:first-child { padding-left: 0; }
+.sb-div { width: 1px; height: 12px; background: var(--ln); }
+.sbv { color: var(--t1); font-weight: 500; font-variant-numeric: tabular-nums; }
+.sbv.stable { color: var(--s-stable); }
+.sbv.warn   { color: var(--s-warn); }
+
+/* ── Main ────────────────────────────────────────────────────── */
+#main { display: flex; flex: 1; overflow: hidden; }
+
+/* ── Palette ─────────────────────────────────────────────────── */
+#palette {
+  width: 192px;
+  flex-shrink: 0;
+  background: var(--panel);
+  border-right: 1px solid var(--ln);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+
+.pal-sec {
+  font-size: 9px;
+  color: var(--t3);
+  text-transform: uppercase;
+  letter-spacing: .14em;
+  font-weight: 600;
+  padding: 8px 6px 3px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.pal-sec::before { content: '·'; }
+
+.chip {
+  display: grid;
+  grid-template-columns: 20px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: var(--r2);
+  border: 1px solid var(--ln);
+  background: var(--elev);
+  cursor: grab;
+  user-select: none;
+  transition: border-color var(--tf), background var(--tf);
+}
+.chip:hover { border-color: var(--ln2); background: rgba(255,255,255,.035); }
+.chip:active { cursor: grabbing; }
+.chip.off { opacity: .3; cursor: not-allowed; }
+.chip.off:hover { border-color: var(--ln); background: var(--elev); }
+
+.chip-glyph {
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1;
+}
+.chip-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--t1);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.chip-tag {
+  font-size: 9px;
+  color: var(--t3);
+}
+
+/* ── Canvas ──────────────────────────────────────────────────── */
+#cwrap {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background-color: var(--canvas);
+  background-image: radial-gradient(circle, #161B27 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+#canvas { width: 100%; height: 100%; position: relative; transform-origin: 0 0; }
+
+/* ── Resize handles ──────────────────────────────────────────── */
+.rhandle {
+  width: 4px;
+  background: var(--ln);
+  cursor: col-resize;
+  flex-shrink: 0;
+  z-index: 5;
+  transition: background var(--tf);
+}
+.rhandle:hover, .rhandle.dragging { background: var(--pri); }
+
+.hhandle {
+  height: 4px;
+  background: var(--ln);
+  cursor: row-resize;
+  flex-shrink: 0;
+  z-index: 5;
+  transition: background var(--tf);
+}
+.hhandle:hover, .hhandle.dragging { background: var(--pri); }
+
+/* ── Zoom control ────────────────────────────────────────────── */
+#zoom-ctrl {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  background: var(--elev);
+  border: 1px solid var(--ln);
+  border-radius: var(--r2);
+  padding: 2px;
+}
+.zbtn {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--t2);
+  background: transparent;
+  border: none;
+  border-radius: var(--r1);
+  padding: 4px 7px;
+  cursor: pointer;
+  line-height: 1;
+  transition: color var(--tf), background var(--tf);
+}
+.zbtn:hover { color: var(--t1); background: rgba(255,255,255,.06); }
+#zpct {
+  font-size: 10px;
+  color: var(--t3);
+  padding: 0 4px;
+  min-width: 38px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+.empty-hint {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  text-align: center;
+  pointer-events: none;
+}
+.eh-icon { font-size: 26px; opacity: .12; margin-bottom: 8px; }
+.eh-txt {
+  font-size: 11px;
+  color: var(--t3);
+  line-height: 1.9;
+  letter-spacing: .04em;
+}
+
+/* ── Node cards ──────────────────────────────────────────────── */
+.cnode {
+  position: absolute;
+  width: 152px;
+  background: var(--elev);
+  border: 1px solid var(--ln);
+  border-radius: var(--r2);
+  overflow: visible;
+  cursor: move;
+  user-select: none;
+  transition: border-color var(--tf);
+}
+.cnode:hover { border-color: var(--ln2); }
+.cnode.sel { border-color: var(--nc); box-shadow: 0 0 0 1px var(--nc); }
+
+.nstrip { height: 3px; background: var(--nc); border-radius: var(--r2) var(--r2) 0 0; }
+.ninner { padding: 6px 10px 8px; overflow: hidden; border-radius: 0 0 var(--r2) var(--r2); }
+
+.nhead {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 3px;
+}
+.nglyph { font-size: 12px; font-weight: 700; color: var(--nc); line-height: 1; }
+.nrole {
+  flex: 1;
+  font-size: 9px;
+  color: var(--nc);
+  text-transform: uppercase;
+  letter-spacing: .14em;
+  font-weight: 600;
+}
+.nfires { font-size: 9px; color: var(--t3); font-variant-numeric: tabular-nums; }
+.nlabel { font-size: 12px; font-weight: 500; color: var(--t1); }
+.nmeta { display: flex; gap: 8px; margin-top: 4px; font-size: 9px; color: var(--t2); }
+.mp { color: var(--tdim); }
+
+/* Ports */
+.port {
+  position: absolute;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--nc);
+  background: var(--canvas);
+  cursor: crosshair;
+  transition: background var(--tf), transform var(--tf);
+  z-index: 2;
+}
+.port:hover { background: var(--nc); }
+.pin  { top: 50%; left: -5px;  transform: translateY(-50%); }
+.pout { top: 50%; right: -5px; transform: translateY(-50%); }
+.pin:hover  { transform: translateY(-50%) scale(1.35); }
+.pout:hover { transform: translateY(-50%) scale(1.35); }
+
+/* ── SVG wires ───────────────────────────────────────────────── */
+#wsvg {
+  position: absolute; top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+.wire           { fill: none; stroke-width: 1.5; }
+.wire.context   { stroke: #3A4256; }
+.wire.peer      { stroke: #6FB893; }
+.wire.feedback  { stroke: #C99955; stroke-dasharray: 6 3; }
+.wire.tmp       { stroke: var(--pri); stroke-dasharray: 4 3; opacity: .6; }
+.wlabel {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8px;
+  fill: var(--t3);
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  font-weight: 600;
+}
+
+/* ── Role picker ─────────────────────────────────────────────── */
+#rpick {
+  position: fixed;
+  background: var(--elev);
+  border: 1px solid var(--ln2);
+  border-radius: var(--r3);
+  padding: 5px;
+  z-index: 200;
+  box-shadow: 0 8px 24px rgba(0,0,0,.55);
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 128px;
+}
+#rpick.show { display: flex; }
+.ropt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--r1);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--t2);
+  transition: background var(--tf), color var(--tf);
+}
+.ropt:hover { background: rgba(255,255,255,.05); color: var(--t1); }
+.rdot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.ro-ctx  .rdot { background: #5C6680; }
+.ro-peer .rdot { background: #6FB893; }
+.ro-fb   .rdot { background: #C99955; }
+
+/* ── Inspector ───────────────────────────────────────────────── */
+#insp {
+  width: 240px;
+  flex-shrink: 0;
+  background: var(--panel);
+  border-left: 1px solid var(--ln);
+  display: flex;
+  flex-direction: column;
+}
+.itabs {
+  display: flex;
+  border-bottom: 1px solid var(--ln);
+  flex-shrink: 0;
+}
+.itab {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--t3);
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  padding: 10px 14px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color var(--tf);
+}
+.itab:hover { color: var(--t2); }
+.itab.on { color: var(--t1); border-bottom-color: var(--pri); }
+
+#ibody {
+  flex: 1;
+  padding: 12px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.iempty { font-size: 11px; color: var(--t3); line-height: 1.75; }
+.iempty b { color: var(--t2); font-weight: 500; }
+
+.fg { display: flex; flex-direction: column; gap: 4px; }
+.fl { font-size: 9px; color: var(--t3); text-transform: uppercase; letter-spacing: .12em; font-weight: 500; }
+.fv {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--t1);
+  background: var(--input);
+  border: 1px solid var(--ln);
+  border-radius: var(--r2);
+  padding: 6px 8px;
+  width: 100%;
+  outline: none;
+  transition: border-color var(--tf), box-shadow var(--tf);
+  appearance: none;
+}
+.fv:focus { border-color: var(--pri); box-shadow: 0 0 0 2px rgba(124,132,200,.14); }
+.fv[readonly] { opacity: .4; cursor: default; }
+textarea.fv { resize: vertical; min-height: 54px; line-height: 1.5; }
+select.fv {
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%235C6680'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-color: var(--input);
+  padding-right: 24px;
+}
+.fg2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+.tags { display: flex; gap: 4px; flex-wrap: wrap; }
+.tag {
+  font-size: 9px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-weight: 500;
+}
+.tc  { background: rgba(111,161,204,.08); color: #8FB6D5; border-color: rgba(111,161,204,.35); }
+.tp  { background: rgba(111,184,147,.08); color: #88C4A4; border-color: rgba(111,184,147,.35); }
+.tf  { background: rgba(201,153,85,.08);  color: #DDB075; border-color: rgba(201,153,85,.40); }
+
+.erow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--ln);
+}
+.erow:last-child { border-bottom: none; }
+.ek { font-size: 10px; color: var(--t2); text-transform: uppercase; letter-spacing: .07em; }
+.ev { font-size: 11px; color: var(--t1); font-variant-numeric: tabular-nums; }
+.ev.good { color: var(--s-stable); }
+.ev.warn { color: var(--s-warn); }
+
+.delbtn {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--tdanger);
+  background: transparent;
+  border: 1px solid rgba(209,122,96,.25);
+  border-radius: var(--r2);
+  padding: 7px 10px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: .10em;
+  width: 100%;
+  text-align: center;
+  margin-top: auto;
+  transition: background var(--tf), border-color var(--tf);
+}
+.delbtn:hover { background: rgba(209,122,96,.08); border-color: rgba(209,122,96,.45); }
+
+/* ── Output bar ──────────────────────────────────────────────── */
+#obar {
+  height: 200px;
+  flex-shrink: 0;
+  background: var(--panel);
+  border-top: 1px solid var(--ln);
+  display: flex;
+  flex-direction: column;
+}
+
+.ohdr {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--ln);
+  padding: 0 14px;
+  flex-shrink: 0;
+  gap: 0;
+}
+.otab {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--t3);
+  text-transform: uppercase;
+  letter-spacing: .14em;
+  padding: 8px 10px;
+  cursor: pointer;
+  border-bottom: 1.5px solid transparent;
+  margin-bottom: -1px;
+  transition: color var(--tf);
+}
+.otab:hover { color: var(--t2); }
+.otab.on { color: var(--t1); border-bottom-color: var(--pri); }
+
+.otrace {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  font-size: 9px;
+  color: var(--t3);
+  text-transform: uppercase;
+  letter-spacing: .14em;
+}
+
+#obody {
+  flex: 1;
+  padding: 8px 14px;
+  overflow-y: auto;
+  font-size: 11px;
+  color: var(--t2);
+  line-height: 1.7;
+}
+
+.lrow {
+  display: grid;
+  grid-template-columns: 54px 74px 1fr auto;
+  gap: 10px;
+  align-items: baseline;
+  padding: 1px 0;
+}
+.liter {
+  font-size: 9px;
+  color: var(--t3);
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  font-weight: 500;
+}
+.ldelta { font-variant-numeric: tabular-nums; }
+.ldelta.good { color: var(--s-stable); }
+.ldelta.warn { color: var(--s-warn); }
+.lmsg { color: var(--t2); }
+.lstatus { font-size: 9px; color: var(--t3); text-transform: uppercase; letter-spacing: .10em; }
+.lstatus.stable { color: var(--s-stable); }
+
+/* ── Prompt bar ──────────────────────────────────────────────── */
+#pbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--bg);
+  border-top: 1px solid var(--ln);
+  flex-shrink: 0;
+}
+.ppfx {
+  font-size: 14px;
+  color: var(--pri);
+  font-weight: 600;
+  flex-shrink: 0;
+  line-height: 1;
+}
+#pinput {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--t1);
+  background: transparent;
+  border: 1px solid var(--ln);
+  border-radius: var(--r2);
+  padding: 7px 12px;
+  outline: none;
+  transition: border-color var(--tf);
+}
+#pinput::placeholder { color: var(--t3); }
+#pinput:focus { border-color: var(--ln2); }
+#runbtn {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--bg);
+  background: var(--pri);
+  border: none;
+  border-radius: var(--r2);
+  padding: 8px 20px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: .10em;
+  white-space: nowrap;
+  transition: background var(--tf);
+  flex-shrink: 0;
+}
+#runbtn:hover { background: var(--pri2); }
+#runbtn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ── Scrollbar ───────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--ln); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--ln2); }
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <span class="logotype">Cir<em>Kit</em></span>
+  <span class="tb-sub">SIGNAL RUNTIME</span>
+
+  <div id="conv-mod">
+    <div class="cc">
+      <span class="clabel">Δ</span>
+      <span class="cval" id="cv-d">—</span>
+    </div>
+    <div class="cdiv"></div>
+    <div class="cc">
+      <span class="clabel">ε</span>
+      <span class="cval" id="cv-e">0.0500</span>
+    </div>
+    <div class="cdiv"></div>
+    <div class="cc">
+      <span class="clabel">ITER</span>
+      <span class="cval" id="cv-i">0/8</span>
+    </div>
+    <div class="cdiv"></div>
+    <div class="cc wide">
+      <span class="clabel">STATUS</span>
+      <span class="cstatus">
+        <span class="sdot" id="sdot"></span>
+        <span id="stxt">IDLE</span>
+      </span>
+    </div>
+  </div>
+
+  <div class="tb-spacer"></div>
+  <button class="tb-btn" onclick="newCircuit()">New</button>
+  <button class="tb-btn" onclick="importJSON()">Import</button>
+  <button class="tb-btn" onclick="exportJSON()">Export</button>
+  <div class="tb-sep"></div>
+  <button class="tb-btn danger" onclick="clearCanvas()">Clear</button>
+</div>
+
+<!-- STATE BAR -->
+<div id="statebar">
+  <span class="sb-item">STATE <span class="sbv" id="sb-s">IDLE</span></span>
+  <span class="sb-div"></span>
+  <span class="sb-item">ITER <span class="sbv" id="sb-i">00/8</span></span>
+  <span class="sb-div"></span>
+  <span class="sb-item">Δ <span class="sbv" id="sb-d">—</span></span>
+  <span class="sb-div"></span>
+  <span class="sb-item">FIRED <span class="sbv" id="sb-f">0</span></span>
+  <span class="sb-div"></span>
+  <span class="sb-item">↑ <span class="sbv" id="sb-t">0.00S</span></span>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+
+  <!-- PALETTE -->
+  <div id="palette" style="width:192px">
+    <div class="pal-sec">INPUTS</div>
+    <div class="chip" draggable="true" ondragstart="drag(event,'battery')">
+      <span class="chip-glyph" style="color:var(--c-source)">⊙</span>
+      <span class="chip-name">SOURCE</span>
+      <span class="chip-tag">battery</span>
+    </div>
+
+    <div class="pal-sec">PROCESS</div>
+    <div class="chip" draggable="true" ondragstart="drag(event,'motor')">
+      <span class="chip-glyph" style="color:var(--c-reason)">◉</span>
+      <span class="chip-name">REASON</span>
+      <span class="chip-tag">motor</span>
+    </div>
+    <div class="chip" draggable="true" ondragstart="drag(event,'resistor')">
+      <span class="chip-glyph" style="color:var(--c-filter)">⫷</span>
+      <span class="chip-name">FILTER</span>
+      <span class="chip-tag">resistor</span>
+    </div>
+
+    <div class="pal-sec">LOGIC</div>
+    <div class="chip" draggable="true" ondragstart="drag(event,'and_gate')">
+      <span class="chip-glyph" style="color:var(--c-gate)">∧</span>
+      <span class="chip-name">ALL</span>
+      <span class="chip-tag">and</span>
+    </div>
+    <div class="chip off" title="not implemented">
+      <span class="chip-glyph" style="color:var(--c-gate)">∨</span>
+      <span class="chip-name">ANY</span>
+      <span class="chip-tag">or</span>
+    </div>
+    <div class="chip off" title="not implemented">
+      <span class="chip-glyph" style="color:var(--c-gate)">⊕</span>
+      <span class="chip-name">ONE</span>
+      <span class="chip-tag">xor</span>
+    </div>
+    <div class="chip" draggable="true" ondragstart="drag(event,'router')">
+      <span class="chip-glyph" style="color:var(--c-branch)">⊻</span>
+      <span class="chip-name">BRANCH</span>
+      <span class="chip-tag">router</span>
+    </div>
+
+    <div class="pal-sec">OUTPUT</div>
+    <div class="chip" draggable="true" ondragstart="drag(event,'sink')">
+      <span class="chip-glyph" style="color:var(--c-drain)">↧</span>
+      <span class="chip-name">DRAIN</span>
+      <span class="chip-tag">sink</span>
+    </div>
+  </div>
+
+  <div class="rhandle" id="rh-left"></div>
+
+  <!-- CANVAS -->
+  <div id="cwrap" ondragover="event.preventDefault()" ondrop="drop(event)">
+    <div id="canvas" onclick="deselect(event)">
+      <svg id="wsvg" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div class="empty-hint" id="ehint">
+        <div class="eh-icon">⟳</div>
+        <div class="eh-txt">drag nodes from the palette<br>click to select · drag ports to wire</div>
+      </div>
+    </div>
+    <div id="zoom-ctrl">
+      <button class="zbtn" onclick="adjZoom(-0.1)">−</button>
+      <span id="zpct">100%</span>
+      <button class="zbtn" onclick="adjZoom(0.1)">+</button>
+      <button class="zbtn" onclick="resetZoom()" title="reset zoom">⌂</button>
+    </div>
+  </div>
+
+  <div class="rhandle" id="rh-right"></div>
+
+  <!-- INSPECTOR -->
+  <div id="insp" style="width:240px">
+    <div class="itabs">
+      <span class="itab on" id="it-node"   onclick="inspTab('node')">Inspector</span>
+      <span class="itab"    id="it-engine" onclick="inspTab('engine')">Engine</span>
+    </div>
+    <div id="ibody">
+      <div class="iempty">
+        <b>— no node selected —</b><br>
+        click a node to inspect &amp; configure.<br>
+        drag <code style="color:var(--pri)">○</code> + <code style="color:var(--pri)">○</code> to wire.
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="hhandle" id="rh-bottom"></div>
+
+<!-- OUTPUT BAR -->
+<div id="obar">
+  <div class="ohdr">
+    <span class="otab on" id="ot-log"    onclick="outTab('log')">Log</span>
+    <span class="otab"    id="ot-output" onclick="outTab('output')">Output</span>
+    <span class="otab"    id="ot-json"   onclick="outTab('json')">Circuit JSON</span>
+    <div class="otrace">
+      Δ TRACE
+      <svg id="tsvg" width="100" height="22" viewBox="0 0 100 22"></svg>
+    </div>
+  </div>
+  <div id="obody">
+    <div class="lrow" style="grid-template-columns:1fr">
+      <span style="color:var(--t3)">· no run yet · build a circuit and press RUN ·</span>
+    </div>
+  </div>
+  <div id="pbar">
+    <span class="ppfx">▷</span>
+    <input id="pinput" type="text" placeholder="enter prompt…" onkeydown="if(event.key==='Enter')runCircuit()">
+    <button id="runbtn" onclick="runCircuit()">▷&nbsp; RUN</button>
+  </div>
+</div>
+
+</div><!-- #app -->
+
+<!-- Role picker -->
+<div id="rpick">
+  <div class="ropt ro-ctx"  onclick="pickRole('context')"><span class="rdot"></span>CONTEXT</div>
+  <div class="ropt ro-peer" onclick="pickRole('peer')"><span class="rdot"></span>PEER</div>
+  <div class="ropt ro-fb"   onclick="pickRole('feedback')"><span class="rdot"></span>FEEDBACK</div>
+</div>
+
+<div id="_oc" style="display:none"></div>
+
+<script>
+// ── Node definitions ────────────────────────────────────────────
+const ND = {
+  battery:  { g:'⊙', r:'SOURCE', c:'#9890C2' },
+  motor:    { g:'◉', r:'REASON', c:'#6FB893' },
+  resistor: { g:'⫷', r:'FILTER', c:'#C99955' },
+  and_gate: { g:'∧', r:'ALL',    c:'#C97F61' },
+  router:   { g:'⊻', r:'BRANCH', c:'#6FA1CC' },
+  sink:     { g:'↧', r:'DRAIN',  c:'#A4ACBF' },
+};
+
+const CIRKIT = '/cirkit';
+const MAX_IT = 8;
+const EPS    = 0.05;
+
+// ── State ───────────────────────────────────────────────────────
+let nodes=[], wires=[], sel=null, dragType=null, idN=1;
+let outTab_='log', inspTab_='node';
+let wireFrom=null, wireTo=null, tmpWire=null;
+let rs = mkRS();
+let dtrace=[], t0=null, going=false;
+let zoom=1;
+const ZOOM_MIN=.25, ZOOM_MAX=2.5;
+
+function mkRS() {
+  return { iter:0, delta:null, conv:false, fired:0, runtime:0, cache:0, contra:0, ns:{} };
+}
+
+// ── Default config ──────────────────────────────────────────────
+function defCfg(t) {
+  if (t==='battery')  return { content:'You are a helpful assistant.' };
+  if (t==='motor')    return { system:'You are a helpful assistant.' };
+  if (t==='resistor') return { threshold:0.55 };
+  if (t==='and_gate') return { threshold:0.55, merge_mode:'concat' };
+  if (t==='router')   return { rule:'by_confidence' };
+  return {};
+}
+
+// ── Drag from palette ───────────────────────────────────────────
+function drag(e,t) { dragType=t; e.dataTransfer.effectAllowed='copy'; }
+
+function drop(e) {
+  e.preventDefault();
+  if (!dragType) return;
+  const r = $('cwrap').getBoundingClientRect();
+  addNode(dragType, (e.clientX-r.left)/zoom-76, (e.clientY-r.top)/zoom-24);
+  dragType=null;
+  $('ehint').style.display='none';
+}
+
+// ── Add / render node ───────────────────────────────────────────
+function addNode(type, x, y) {
+  const def = ND[type]; if (!def) return;
+  const id  = type+'_'+(idN++);
+  const n   = { id, type, x:Math.max(0,x), y:Math.max(0,y), label:id, config:defCfg(type) };
+  nodes.push(n);
+  renderNode(n);
+  drawWires();
+  return n;
+}
+
+function renderNode(n) {
+  const def = ND[n.type]||ND.sink;
+  const el  = document.createElement('div');
+  el.className='cnode';
+  el.id='nd-'+n.id;
+  el.style.cssText=`left:${n.x}px;top:${n.y}px;--nc:${def.c}`;
+  el.innerHTML = nodeHTML(n, def);
+  el.addEventListener('click', e=>{ e.stopPropagation(); selectNode(n.id); });
+  makeDrag(el,n);
+  el.querySelector('.pout').addEventListener('mousedown', e=>{ e.stopPropagation(); startWire(n.id,e); });
+  el.querySelector('.pin').addEventListener('mouseup',  e=>{ e.stopPropagation(); endWire(n.id,e); });
+  $('canvas').appendChild(el);
+}
+
+function nodeHTML(n, def) {
+  const stat = rs.ns[n.id]||{};
+  const meta = nodeMeta(n, stat);
+  return `<div class="nstrip"></div>
+<div class="ninner">
+  <div class="nhead">
+    <span class="nglyph">${def.g}</span>
+    <span class="nrole">${def.r}</span>
+    <span class="nfires" id="nf-${n.id}">×${stat.fires||0}</span>
+  </div>
+  <div class="nlabel">${esc(n.label||n.id)}</div>
+  ${meta}
+</div>
+<span class="port pin"  id="pi-${n.id}"></span>
+<span class="port pout" id="po-${n.id}"></span>`;
+}
+
+function nodeMeta(n, stat) {
+  const p=[];
+  if (stat.c!=null) p.push(`<span class="mp">c</span>${stat.c.toFixed(2)}`);
+  if (n.config?.threshold!=null) p.push(`<span class="mp">θ</span>${n.config.threshold}`);
+  if (n.config?.merge_mode) p.push(`<span class="mp">m</span>${n.config.merge_mode.slice(0,3)}`);
+  return p.length ? `<div class="nmeta">${p.join('<span style="width:8px"></span>')}</div>` : '';
+}
+
+function refreshNodeMeta(id) {
+  const n=nodes.find(x=>x.id===id); if(!n) return;
+  const el=$('nd-'+id); if(!el) return;
+  const stat=rs.ns[id]||{};
+  const inner=el.querySelector('.ninner');
+  const old=inner.querySelector('.nmeta');
+  const html=nodeMeta(n,stat);
+  if (old) old.outerHTML = html||'<span></span>';
+  else if (html) inner.insertAdjacentHTML('beforeend', html);
+  const nf=el.querySelector('.nfires');
+  if (nf) nf.textContent='×'+(stat.fires||0);
+}
+
+// ── Canvas drag ─────────────────────────────────────────────────
+function makeDrag(el,n) {
+  let ox,oy;
+  el.addEventListener('mousedown', e=>{
+    if (e.target.classList.contains('port')) return;
+    const wr=$('cwrap').getBoundingClientRect();
+    ox=(e.clientX-wr.left)/zoom-n.x; oy=(e.clientY-wr.top)/zoom-n.y;
+    const mv=me=>{ n.x=(me.clientX-wr.left)/zoom-ox; n.y=(me.clientY-wr.top)/zoom-oy; el.style.left=n.x+'px'; el.style.top=n.y+'px'; drawWires(); };
+    const up=()=>{ window.removeEventListener('mousemove',mv); window.removeEventListener('mouseup',up); };
+    window.addEventListener('mousemove',mv);
+    window.addEventListener('mouseup',up);
+  });
+}
+
+// ── Wire drawing ────────────────────────────────────────────────
+function startWire(fromId,e) {
+  wireFrom=fromId;
+  const svg=$('wsvg');
+  tmpWire=document.createElementNS('http://www.w3.org/2000/svg','path');
+  tmpWire.setAttribute('class','wire tmp');
+  svg.appendChild(tmpWire);
+  const wr=$('cwrap').getBoundingClientRect();
+  const mv=me=>{ const [x1,y1]=pc('po-'+fromId); tmpWire.setAttribute('d',bz(x1,y1,(me.clientX-wr.left)/zoom,(me.clientY-wr.top)/zoom)); };
+  const up=()=>{ window.removeEventListener('mousemove',mv); window.removeEventListener('mouseup',up);
+    if (tmpWire){tmpWire.remove();tmpWire=null;}
+    if (!wireTo) wireFrom=null; };
+  window.addEventListener('mousemove',mv);
+  window.addEventListener('mouseup',up);
+}
+
+function endWire(toId,e) {
+  if (!wireFrom||wireFrom===toId) return;
+  wireTo=toId;
+  const p=$('rpick');
+  p.style.left=(e.clientX+8)+'px'; p.style.top=(e.clientY-10)+'px';
+  p.classList.add('show');
+  const dismiss=ev=>{ if(!p.contains(ev.target)){p.classList.remove('show');wireFrom=null;wireTo=null;document.removeEventListener('mousedown',dismiss);} };
+  setTimeout(()=>document.addEventListener('mousedown',dismiss),10);
+}
+
+function pickRole(role) {
+  $('rpick').classList.remove('show');
+  if (wireFrom&&wireTo) { wires.push({from:wireFrom,to:wireTo,role}); drawWires(); }
+  wireFrom=null; wireTo=null;
+}
+
+function pc(id) {
+  const el=document.getElementById(id); if(!el) return[0,0];
+  const wr=$('cwrap').getBoundingClientRect();
+  const r=el.getBoundingClientRect();
+  return [(r.left+r.width/2-wr.left)/zoom, (r.top+r.height/2-wr.top)/zoom];
+}
+
+function bz(x1,y1,x2,y2) { const cx=(x1+x2)/2; return `M${x1} ${y1} C${cx} ${y1} ${cx} ${y2} ${x2} ${y2}`; }
+
+function drawWires() {
+  const svg=$('wsvg'); const tmp=tmpWire;
+  svg.innerHTML=`<defs>
+    <marker id="ac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L9 5L2 9" fill="none" stroke="#3A4256" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="ap" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L9 5L2 9" fill="none" stroke="#6FB893" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="af" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L9 5L2 9" fill="none" stroke="#C99955" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>`;
+  if (tmp) svg.appendChild(tmp);
+  wires.forEach(w=>{
+    const [x1,y1]=pc('po-'+w.from), [x2,y2]=pc('pi-'+w.to);
+    if (!x1&&!y1) return;
+    const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d',bz(x1,y1,x2,y2));
+    path.setAttribute('class','wire '+w.role);
+    path.setAttribute('marker-end',`url(#${w.role==='peer'?'ap':w.role==='feedback'?'af':'ac'})`);
+    svg.appendChild(path);
+    if (w.role!=='context') {
+      const mx=(x1+x2)/2,my=(y1+y2)/2;
+      const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('x',mx); t.setAttribute('y',my-6);
+      t.setAttribute('text-anchor','middle'); t.setAttribute('class','wlabel');
+      t.textContent=w.role.toUpperCase(); svg.appendChild(t);
+    }
+  });
+}
+
+// ── Selection ───────────────────────────────────────────────────
+function selectNode(id) {
+  sel=id;
+  document.querySelectorAll('.cnode').forEach(el=>el.classList.remove('sel'));
+  document.getElementById('nd-'+id)?.classList.add('sel');
+  if (inspTab_==='node') showNodeInsp(id);
+}
+
+function deselect(e) {
+  if (e.target.id!=='canvas') return;
+  sel=null;
+  document.querySelectorAll('.cnode').forEach(el=>el.classList.remove('sel'));
+  if (inspTab_==='node') showNodeInsp(null);
+}
+
+// ── Inspector tabs ──────────────────────────────────────────────
+function inspTab(t) {
+  inspTab_=t;
+  ['node','engine'].forEach(x=>$('it-'+x).classList.toggle('on',x===t));
+  t==='node' ? showNodeInsp(sel) : showEngineInsp();
+}
+
+function showNodeInsp(id) {
+  const body=$('ibody');
+  if (!id) {
+    body.innerHTML='<div class="iempty"><b>— no node selected —</b><br>click a node to inspect &amp; configure.<br>drag <code style="color:var(--pri)">○</code> + <code style="color:var(--pri)">○</code> to wire.</div>';
+    return;
+  }
+  const n=nodes.find(x=>x.id===id); if(!n) return;
+  const def=ND[n.type]||ND.sink;
+  const nw=wires.filter(w=>w.from===id||w.to===id);
+  const roles=[...new Set(nw.map(w=>w.role))];
+  let h=`
+    <div class="fg"><div class="fl">ID</div><input class="fv" value="${esc(n.id)}" readonly></div>
+    <div class="fg"><div class="fl">Type · ${def.r}</div><input class="fv" value="${esc(n.type)}" readonly></div>
+    <div class="fg"><div class="fl">Label</div><input class="fv" value="${esc(n.label||n.id)}" onchange="setLabel('${id}',this.value)"></div>
+  `;
+  if (n.type==='battery')
+    h+=`<div class="fg"><div class="fl">Content</div><textarea class="fv" onchange="setCfg('${id}','content',this.value)">${esc(n.config.content||'')}</textarea></div>`;
+  if (n.type==='motor')
+    h+=`<div class="fg"><div class="fl">System prompt</div><textarea class="fv" onchange="setCfg('${id}','system',this.value)">${esc(n.config.system||'')}</textarea></div>`;
+  if (n.config?.threshold!=null)
+    h+=`<div class="fg"><div class="fl">Threshold θ</div><input class="fv" type="number" step="0.05" min="0" max="1" value="${n.config.threshold}" onchange="setCfg('${id}','threshold',+this.value)"></div>`;
+  if (n.config?.merge_mode!=null) {
+    const modes=['concat','dedupe','synthesize'];
+    h+=`<div class="fg"><div class="fl">Merge mode</div><select class="fv" onchange="setCfg('${id}','merge_mode',this.value)">${modes.map(m=>`<option ${n.config.merge_mode===m?'selected':''}>${m}</option>`).join('')}</select></div>`;
+  }
+  if (n.config?.rule!=null)
+    h+=`<div class="fg"><div class="fl">Route rule</div><input class="fv" value="${esc(n.config.rule)}" onchange="setCfg('${id}','rule',this.value)"></div>`;
+  if (roles.length)
+    h+=`<div class="fg"><div class="fl">Wire roles</div><div class="tags">${roles.map(r=>`<span class="tag t${r[0]}">${r}</span>`).join('')}</div></div>`;
+  h+=`<button class="delbtn" onclick="delNode('${id}')">Delete node</button>`;
+  body.innerHTML=h;
+}
+
+function showEngineInsp() {
+  const r=rs, c=r.conv;
+  $('ibody').innerHTML=`
+    <div class="fl" style="margin-bottom:4px">ENGINE STATE</div>
+    ${er('EPSILON',   EPS.toFixed(4))}
+    ${er('MAX ITER',  MAX_IT)}
+    ${er('ITER',      r.iter?`${pad2(r.iter)}/${MAX_IT}`:`00/${MAX_IT}`)}
+    ${er('DELTA',     r.delta!=null?r.delta.toFixed(4):'—', r.delta!=null&&r.delta<EPS?'good':'warn')}
+    ${er('CONVERGED', c?'true':'false', c?'good':'')}
+    ${er('RUNTIME',   r.runtime?r.runtime.toFixed(2)+'s':'—')}
+    ${er('FIRES (CUMUL.)', r.fired||0)}
+    ${er('CACHE HITS',    r.cache||0)}
+    ${er('CONTRADICTIONS',r.contra||0)}
+  `;
+}
+
+function er(k,v,cls='') { return `<div class="erow"><span class="ek">${k}</span><span class="ev ${cls}">${v}</span></div>`; }
+
+function setLabel(id,v) {
+  const n=nodes.find(x=>x.id===id); if(!n) return;
+  n.label=v;
+  const el=document.getElementById('nd-'+id);
+  if (el) el.querySelector('.nlabel').textContent=v;
+}
+
+function setCfg(id,k,v) {
+  const n=nodes.find(x=>x.id===id); if(!n) return;
+  n.config[k]=v;
+  refreshNodeMeta(id);
+}
+
+function delNode(id) {
+  nodes=nodes.filter(x=>x.id!==id);
+  wires=wires.filter(w=>w.from!==id&&w.to!==id);
+  document.getElementById('nd-'+id)?.remove();
+  drawWires(); showNodeInsp(null); sel=null;
+}
+
+// ── Output tabs ─────────────────────────────────────────────────
+function outTab(t) {
+  outTab_=t;
+  ['log','output','json'].forEach(x=>$('ot-'+x).classList.toggle('on',x===t));
+  const body=$('obody');
+  if (t==='json') {
+    body.innerHTML=`<pre style="font-size:11px;white-space:pre-wrap;color:var(--t2)">${esc(JSON.stringify(circuitJSON(),null,2))}</pre>`;
+  } else if (t==='output') {
+    const c=$('_oc').textContent;
+    body.innerHTML=c
+      ?`<pre style="font-size:11.5px;white-space:pre-wrap;color:var(--t1);line-height:1.65">${esc(c)}</pre>`
+      :`<div class="lrow" style="grid-template-columns:1fr"><span style="color:var(--t3)">· no output yet ·</span></div>`;
+  }
+}
+
+// ── Circuit JSON ─────────────────────────────────────────────────
+function circuitJSON() {
+  return {
+    config: { epsilon:EPS, max_iter:MAX_IT },
+    sink: nodes.find(n=>n.type==='sink')?.id||'',
+    nodes: nodes.map(n=>({ id:n.id, type:n.type, config:n.config, x:n.x, y:n.y })),
+    wires: wires.map(w=>({ from:w.from, to:w.to, role:w.role })),
+  };
+}
+
+function strip(c) {
+  return { ...c, nodes: c.nodes.map(({x,y,...r})=>r) };
+}
+
+// ── Canvas ops ──────────────────────────────────────────────────
+function newCircuit() { clearCanvas(); }
+function clearCanvas() {
+  nodes=[]; wires=[]; sel=null; idN=1;
+  [...document.querySelectorAll('.cnode')].forEach(el=>el.remove());
+  $('wsvg').innerHTML=''; $('ehint').style.display=''; $('_oc').textContent='';
+  resetRS(); showNodeInsp(null);
+  $('obody').innerHTML='<div class="lrow" style="grid-template-columns:1fr"><span style="color:var(--t3)">· ready ·</span></div>';
+}
+
+function exportJSON() {
+  const b=new Blob([JSON.stringify(circuitJSON(),null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='circuit.json'; a.click();
+}
+
+function importJSON() {
+  const inp=document.createElement('input'); inp.type='file'; inp.accept='.json';
+  inp.onchange=e=>{
+    const r=new FileReader();
+    r.onload=ev=>{
+      try {
+        const data=JSON.parse(ev.target.result);
+        clearCanvas();
+        let xi=40,yi=40;
+        (data.nodes||[]).forEach((n,i)=>{
+          n.x=n.x??(xi+(i%3)*200); n.y=n.y??(yi+Math.floor(i/3)*120);
+          n.label=n.label||n.id; n.config=n.config||defCfg(n.type);
+          nodes.push(n); renderNode(n);
+          idN=Math.max(idN, parseInt(n.id.split('_').pop()||'0')+1);
+        });
+        (data.wires||[]).forEach(w=>wires.push(w));
+        drawWires(); $('ehint').style.display='none';
+      } catch(err){ alert('Invalid JSON: '+err.message); }
+    };
+    r.readAsText(e.target.files[0]);
+  };
+  inp.click();
+}
+
+// ── Run state UI ─────────────────────────────────────────────────
+function resetRS() {
+  rs=mkRS(); dtrace=[]; t0=null; going=false;
+  convUI('idle', null, 0); sbUI('IDLE', null, 0, null); traceSVG();
+}
+
+function convUI(state, delta, iter) {
+  const dot=$('sdot'), txt=$('stxt'), cvd=$('cv-d'), cvi=$('cv-i');
+  dot.className='sdot'; txt.textContent='IDLE';
+  if (state==='run')    { dot.classList.add('run');     txt.textContent='RUNNING'; }
+  if (state==='stable') { dot.classList.add('stable');  txt.textContent='CONVERGED'; }
+  if (state==='maxiter'){ dot.classList.add('maxiter'); txt.textContent='MAX ITER'; }
+  cvd.textContent = delta!=null ? delta.toFixed(4) : '—';
+  cvd.className   = 'cval' + (delta!=null ? (delta<EPS?' good':' warn') : '');
+  cvi.textContent = iter ? `${pad2(iter)}/${MAX_IT}` : `0/${MAX_IT}`;
+}
+
+function sbUI(state, delta, iter, ms) {
+  const ss=$('sb-s');
+  ss.textContent=state;
+  ss.className='sbv'+(state==='STABLE'?' stable':state==='RUNNING'?' warn':'');
+  $('sb-i').textContent=iter?`${pad2(iter)}/${MAX_IT}`:`00/${MAX_IT}`;
+  $('sb-d').textContent=delta!=null?delta.toFixed(4):'—';
+  $('sb-t').textContent=ms!=null?(ms/1000).toFixed(2)+'S':'0.00S';
+}
+
+function traceSVG() {
+  const svg=$('tsvg');
+  if (!dtrace.length) { svg.innerHTML=''; return; }
+  const W=100,H=22,p=2;
+  const vals=dtrace.slice(-20);
+  const mx=Math.max(...vals,0.5);
+  const pts=vals.map((v,i)=>{
+    const x=p+(i/Math.max(vals.length-1,1))*(W-p*2);
+    const y=H-p-(v/mx)*(H-p*2);
+    return `${x},${y}`;
+  }).join(' ');
+  const lv=vals[vals.length-1];
+  const col=lv<EPS?'#6FB893':'#C99955';
+  svg.innerHTML=`<polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><line x1="0" y1="${H-p}" x2="${W}" y2="${H-p}" stroke="${col}" stroke-dasharray="2 3" opacity="0.25" stroke-width="1"/>`;
+}
+
+// ── Run ─────────────────────────────────────────────────────────
+async function runCircuit() {
+  const prompt=$('pinput').value.trim();
+  if (!prompt)       { alert('Enter a prompt first'); return; }
+  if (!nodes.length) { alert('Add some nodes first'); return; }
+  if (going) return;
+  going=true; t0=Date.now(); dtrace=[];
+  $('runbtn').disabled=true; $('_oc').textContent='';
+  outTab('log');
+  const body=$('obody'); body.innerHTML='';
+  convUI('run',null,0); sbUI('RUNNING',null,0,0);
+  rs=mkRS();
+
+  const cj=circuitJSON();
+  let backend=false;
+  try {
+    const vr=await fetch(`${CIRKIT}/validate/`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({circuit:strip(cj)})});
+    if (vr.ok) { const vd=await vr.json(); if(!vd.valid){alert('Errors:\n'+vd.errors.join('\n'));done();return;} backend=true; }
+  } catch(_) {}
+
+  backend ? await runReal(body,cj,prompt) : runDemo(body);
+}
+
+async function runReal(body,cj,prompt) {
+  try {
+    const r=await fetch(`${CIRKIT}/run/`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':cookie('csrftoken')},
+      body:JSON.stringify({circuit:strip(cj),prompt}),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const rd=r.body.getReader(), dec=new TextDecoder(); let buf='';
+    while(true){
+      const{done,value}=await rd.read(); if(done) break;
+      buf+=dec.decode(value,{stream:true});
+      const ls=buf.split('\n'); buf=ls.pop();
+      for(const l of ls){ if(!l.trim()) continue;
+        try{ handleEv(JSON.parse(l),body); } catch{ addLog(body,'?',l,''); }
+      }
+    }
+  } catch(err){ addLog(body,'!','Connection error: '+err.message,'warn'); }
+  done();
+}
+
+function handleEv(ev,body) {
+  const ms=Date.now()-t0;
+  if (ev.type==='iter') {
+    rs.iter=ev.iter; rs.delta=ev.delta;
+    dtrace.push(ev.delta);
+    convUI('run',ev.delta,ev.iter); sbUI('RUNNING',ev.delta,ev.iter,ms);
+    addLog(body,ev.iter,ev.message||'',ev.delta>EPS?'warn':'good',ev.delta);
+    traceSVG();
+  } else if (ev.type==='output') {
+    $('_oc').textContent=ev.content;
+  } else if (ev.type==='done') {
+    rs.iter=ev.iter; rs.delta=ev.delta; rs.conv=ev.converged; rs.runtime=ms/1000;
+    const st=ev.converged?'stable':'maxiter';
+    convUI(st,ev.delta,ev.iter); sbUI(ev.converged?'STABLE':'MAX ITER',ev.delta,ev.iter,ms);
+    const msg=ev.converged?`Δ=${ev.delta?.toFixed(4)} < ε=${EPS} — converged`:`MAX_ITER hit — Δ=${ev.delta?.toFixed(4)} — not converged`;
+    addLog(body,ev.iter,msg,ev.converged?'good':'warn',null,ev.converged?'STABLE':'MAX ITER');
+  } else if (ev.type==='error') {
+    addLog(body,'!',ev.message,'warn');
+  }
+  if (inspTab_==='engine') showEngineInsp();
+}
+
+function runDemo(body) {
+  const steps=[
+    {iter:1,delta:.4821,msg:'Battery seed propagating · motor nodes computing'},
+    {iter:2,delta:.1810,msg:'AND gate: 2 inputs ≥ θ — passing · synthesizer fires'},
+    {iter:3,delta:.0623,msg:'Feedback dampens contradictions · cache bypass on writer'},
+    {iter:4,delta:.0091,msg:'Δ below ε — locking consensus'},
+  ];
+  let i=0;
+  const step=()=>{
+    if (i>=steps.length) {
+      const l=steps[steps.length-1];
+      rs.iter=l.iter; rs.delta=l.delta; rs.conv=true;
+      rs.fired=nodes.length*4; rs.runtime=(Date.now()-t0)/1000;
+      convUI('stable',l.delta,l.iter); sbUI('STABLE',l.delta,l.iter,Date.now()-t0);
+      addLog(body,l.iter,'converged · Δ='+l.delta.toFixed(4)+' < ε='+EPS,'good',null,'STABLE');
+      $('sb-f').textContent=rs.fired; traceSVG();
+      if(inspTab_==='engine') showEngineInsp();
+      done(); return;
+    }
+    const s=steps[i];
+    rs.iter=s.iter; rs.delta=s.delta; dtrace.push(s.delta);
+    convUI('run',s.delta,s.iter); sbUI('RUNNING',s.delta,s.iter,Date.now()-t0);
+    addLog(body,s.iter,s.msg,s.delta>EPS?'warn':'good',s.delta);
+    $('sb-f').textContent=nodes.length*s.iter; traceSVG();
+    if(inspTab_==='engine') showEngineInsp();
+    i++; setTimeout(step,700);
+  };
+  setTimeout(step,200);
+}
+
+function done() { going=false; $('runbtn').disabled=false; }
+
+// ── Log ─────────────────────────────────────────────────────────
+function addLog(body,iter,msg,cls,delta,badge) {
+  const row=document.createElement('div'); row.className='lrow';
+  row.innerHTML=`
+    <span class="liter">ITER ${pad2(iter)}</span>
+    <span class="ldelta ${cls||''}">${delta!=null?'δ='+delta.toFixed(4):''}</span>
+    <span class="lmsg">${esc(msg)}</span>
+    <span class="lstatus ${cls==='good'&&badge?'stable':''}">${badge||'—'}</span>
+  `;
+  body.appendChild(row); body.scrollTop=body.scrollHeight;
+}
+
+// ── Zoom ────────────────────────────────────────────────────────
+function adjZoom(d) {
+  zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, +(zoom+d).toFixed(2)));
+  applyZoom();
+}
+function resetZoom() { zoom=1; applyZoom(); }
+function applyZoom() {
+  $('canvas').style.transform = `scale(${zoom})`;
+  $('zpct').textContent = Math.round(zoom*100)+'%';
+  drawWires();
+}
+
+// ── Resize panels ────────────────────────────────────────────────
+function makeVResizable(handleId, targetId, dir) {
+  const handle=document.getElementById(handleId);
+  const target=document.getElementById(targetId);
+  if (!handle||!target) return;
+  let startY, startH;
+  handle.addEventListener('mousedown', e=>{
+    startY=e.clientY; startH=target.offsetHeight;
+    handle.classList.add('dragging');
+    const mv=me=>{
+      const h=Math.min(500,Math.max(60, startH+(me.clientY-startY)*dir));
+      target.style.height=h+'px';
+    };
+    const up=()=>{ handle.classList.remove('dragging'); window.removeEventListener('mousemove',mv); window.removeEventListener('mouseup',up); };
+    window.addEventListener('mousemove',mv);
+    window.addEventListener('mouseup',up);
+  });
+}
+
+function makeResizable(handleId, targetId, dir) {
+  const handle=document.getElementById(handleId);
+  const target=document.getElementById(targetId);
+  if (!handle||!target) return;
+  let startX, startW;
+  handle.addEventListener('mousedown', e=>{
+    startX=e.clientX; startW=target.offsetWidth;
+    handle.classList.add('dragging');
+    const mv=me=>{
+      const w=Math.min(400,Math.max(120, startW+(me.clientX-startX)*dir));
+      target.style.width=w+'px';
+    };
+    const up=()=>{ handle.classList.remove('dragging'); window.removeEventListener('mousemove',mv); window.removeEventListener('mouseup',up); };
+    window.addEventListener('mousemove',mv);
+    window.addEventListener('mouseup',up);
+  });
+}
+
+// ── Helpers ──────────────────────────────────────────────────────
+function $(id) { return document.getElementById(id); }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function pad2(n){ return String(n).padStart(2,'0'); }
+function cookie(name){ for(const p of document.cookie.split(';')){ const[k,v]=p.trim().split('='); if(k===name)return decodeURIComponent(v||''); } return ''; }
+
+// ── Init ────────────────────────────────────────────────────────
+$('cwrap').addEventListener('wheel', e=>{
+  e.preventDefault();
+  adjZoom(e.deltaY < 0 ? 0.1 : -0.1);
+}, {passive:false});
+
+makeResizable('rh-left',  'palette', 1);
+makeResizable('rh-right', 'insp',   -1);
+makeVResizable('rh-bottom', 'obar', -1);
+
+// ── Example circuit ──────────────────────────────────────────────
+setTimeout(()=>{
+  const defs=[
+    {type:'battery',  x:28,  y:100, label:'ctx'},
+    {type:'motor',    x:212, y:30,  label:'writer'},
+    {type:'motor',    x:212, y:162, label:'security'},
+    {type:'and_gate', x:404, y:96,  label:'gate', config:{threshold:.55,merge_mode:'synthesize'}},
+    {type:'sink',     x:564, y:96,  label:'out'},
+  ];
+  defs.forEach(d=>{
+    const id=d.type+'_'+(idN++);
+    const n={id,type:d.type,x:d.x,y:d.y,label:d.label,config:d.config||defCfg(d.type)};
+    nodes.push(n); renderNode(n);
+  });
+  [{from:'battery_1',to:'motor_2',role:'context'},
+   {from:'battery_1',to:'motor_3',role:'context'},
+   {from:'motor_2',  to:'and_gate_4',role:'peer'},
+   {from:'motor_3',  to:'and_gate_4',role:'peer'},
+   {from:'and_gate_4',to:'sink_5',role:'context'},
+   {from:'and_gate_4',to:'motor_2',role:'feedback'},
+  ].forEach(w=>wires.push(w));
+  drawWires(); $('ehint').style.display='none';
+},100);
+</script>
+</body>
+</html>
