@@ -59,7 +59,9 @@ Valid roles: `context` (default) | `feedback` | `peer`. Router wires use `branch
 - **Reviewer needs peer wire from writer**: In writer+reviewer circuits, battery→reviewer gives task context but reviewer CANNOT see the written content without a `writer→reviewer (peer)` wire. Always add this wire or reviewer has nothing to review.
 
 ## Workflow
-When user says "clear", "ready to clear", or similar — before clearing, update CLAUDE.md, README.md, and any other context/doc files with learnings from the session (new patterns, gotchas, schema changes, node behavior, anything that helps future sessions).
+When user says "clear", "ready to clear", or similar — before clearing:
+1. Update CLAUDE.md, README.md, and any relevant `docs/` pages with learnings from the session (new patterns, gotchas, schema changes, node behavior, anything that helps future sessions).
+2. Commit and push so the live docsite reflects the changes: `git add docs/ mkdocs.yml CLAUDE.md README.md && git commit && git push`.
 
 ## UI architecture
 - Single-file app (`ui/index.html`) — all CSS/JS inline, no build step, no dependencies except Google Fonts
