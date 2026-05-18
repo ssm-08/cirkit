@@ -13,6 +13,9 @@ dependencies = []
 cirkit = "cirkit.__main__:main"
 
 [project.optional-dependencies]
+test = [
+  "pytest>=7",
+]
 docs = [
   "mkdocs-material>=9.5",
 ]
