@@ -19,7 +19,9 @@ Signal circuit reasoning engine. Graph of stateful nodes propagate typed Signals
 - `ui/circuit_utils.py` — shared parse/validate logic imported by both server.py and views.py
 
 ## Setup
-- `pip install -e .` — installs `cirkit` CLI entry point; not required for `python -m cirkit`
+- `pip install -e ".[test]"` — installs cirkit + pytest (required for tests); use this form for CI
+- `pip install -e ".[docs]"` — installs cirkit + mkdocs-material for local docsite work
+- `pip install -e .` — bare install, no test/docs extras; sufficient for running circuits
 
 ## Commands
 - `python -m pytest tests/ -v` — run all 118 tests (fast, <1s, no LLM calls)
@@ -57,6 +59,9 @@ Valid roles: `context` (default) | `feedback` | `peer`. Router wires use `branch
 - **Feedback wire only useful when**: the signal flowing back is meaningful content (synthesizer output, critique text). Never useful when source is a blocked gate.
 - **AND gate ignores wire role**: AndGate.step() collects ALL non-ZERO inputs regardless of role (context/peer/feedback treated identically). Wire role on motor→gate wires is purely semantic/documentary — no functional difference between `peer` and `context` for gate inputs.
 - **Reviewer needs peer wire from writer**: In writer+reviewer circuits, battery→reviewer gives task context but reviewer CANNOT see the written content without a `writer→reviewer (peer)` wire. Always add this wire or reviewer has nothing to review.
+- **Parallel independent reviewers need no peer wires between them**: If two motors both analyze the same input (e.g., code-review + security-review of the same PR), only `battery → each motor` wires are needed. Do NOT add `motor_A → motor_B (peer)` unless you explicitly want one to see the other's draft.
+- **merge_mode: synthesize does NOT call the LLM**: AND-Gate `synthesize` mode only concatenates inputs and sets `flags["needs_synthesis"] = True`. A downstream synthesizer Motor reads that flag and does the actual LLM call. Without the Motor, the flag does nothing. `concat` mode suffices if you don't need LLM-quality fusion — wire gate directly to Sink.
+- **Gate-block + synthesizer feedback**: when AND-Gate blocks, it emits `Signal(contradiction=1.0, content="[BLOCKED]")` — NOT ZERO. Synthesizer still runs (R2 bypass), but its input is "[BLOCKED]" → produces low-quality output → poor feedback to motors. Retries still happen (changing synthesizer output = cache miss for motors) but feedback content is useless. Design circuits so gate nearly always passes (threshold 0.45–0.55); gate blocking is an edge case, not the normal operating mode.
 
 ## Workflow
 When user says "clear", "ready to clear", or similar — before clearing:
@@ -114,11 +119,13 @@ When user says "clear", "ready to clear", or similar — before clearing:
 - **server.py background job**: `serve_forever()` blocks the terminal — that's normal, not a hang.
 
 ## Docsite & CI infrastructure
-- `mkdocs.yml` + `docs/` — MkDocs Material docsite; 15 pages (index + 5 concepts + 5 guides + 4 reference)
+- `mkdocs.yml` + `docs/` — MkDocs Material docsite; 17 pages (index + 5 concepts + 5 guides + 6 reference incl. architecture + roadmap)
+- Mermaid diagrams enabled via `pymdownx.superfences` custom_fences in mkdocs.yml — use ` ```mermaid ` blocks
 - Install docs deps: `pip install -e ".[docs]"` → then `mkdocs serve` or `mkdocs build --strict`
-- `.github/workflows/ci.yml` — Python 3.11/3.12/3.13 matrix, `python -m pytest tests/ -v`; no coverage gating, no lint
-- `.github/workflows/docs.yml` — triggers on push to master when `docs/**` or `mkdocs.yml` changes; deploys to GitHub Pages
+- `.github/workflows/ci.yml` — Python 3.11/3.12/3.13 matrix; installs `pip install -e ".[test]"` (includes pytest); no coverage gating, no lint
+- `.github/workflows/docs.yml` — triggers on push to master when `docs/**` or `mkdocs.yml` changes + `workflow_dispatch` for manual trigger; deploys via `actions/deploy-pages` (requires Pages source = "GitHub Actions" in repo settings, NOT "Deploy from branch")
 - Python 3.14 has no GitHub Actions runner — CI matrix stops at 3.13
+- **CI pyproject.toml invariants**: build-backend must be `setuptools.build_meta` (not `setuptools.backends.legacy` — fails on Python 3.11 CI); `[tool.setuptools.packages.find] include = ["cirkit*"]` required to exclude `ui/` from package discovery; pytest lives in `[project.optional-dependencies] test`
 
 ## Read tool quirk
 After writing files, use `Bash cat` to read externally-modified versions — `Read` tool returns stale content after a `Write`.
