@@ -80,9 +80,9 @@ Use a Resistor to raise the bar for one specific input above what the downstream
 
 **Merge modes:**
 
-- `concat` — join with `\n---\n`, no LLM
-- `dedupe` — line-level case-insensitive deduplication, preserve first-occurrence order
-- `synthesize` — concat + set `flags["needs_synthesis"] = True` (signal to a downstream synthesizer Motor)
+- `concat` — join with `\n---\n`, no LLM. Wire gate directly to Sink when this is sufficient.
+- `dedupe` — line-level case-insensitive deduplication, preserve first-occurrence order, no LLM
+- `synthesize` — same as `concat`, plus sets `flags["needs_synthesis"] = True`. This flag does **not** call the LLM — it signals a downstream synthesizer Motor to do the actual LLM fusion. Without a Motor downstream, this flag goes nowhere.
 
 When blocked, the gate emits `contradiction = 1.0` (not `Signal.ZERO`). This triggers the R2 cache bypass in upstream Motors, forcing them to re-run with the contradiction as implicit feedback.
 
