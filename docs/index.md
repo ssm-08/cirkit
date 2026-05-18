@@ -2,19 +2,27 @@
 
 **Signal circuit reasoning engine.** Define a graph of nodes in JSON; signals flow through it until outputs converge. The LLM is one node type — the circuit is the orchestration.
 
-```
-Battery ──context──► Motor (writer)   ──peer──► AND-Gate ──► Synthesizer ──► Sink
-                  ► Motor (reviewer) ──peer──►               │
-                  ◄──────────────── feedback ◄───────────────┘
+```mermaid
+flowchart LR
+    bat[Battery] -->|context| wr[Motor · writer]
+    bat -->|context| rv[Motor · reviewer]
+    wr -->|peer| gate[AND-Gate]
+    rv -->|peer| gate
+    gate -->|context| syn[Motor · synthesizer]
+    syn -->|context| sink[Sink]
+    syn -.->|feedback| wr
+    syn -.->|feedback| rv
 ```
 
-Signals carry `content`, `confidence`, `contradiction`, and other metrics. Every iteration, each node reads the previous round's outputs and produces a new signal. The loop runs until `Δ < ε` — convergence — or `max_iter` is reached.
+Signals carry `content`, `confidence`, `contradiction`, and other metrics. Each iteration, every node reads the previous round's outputs and produces a new signal. The loop runs until `Δ < ε` — convergence — or `max_iter` is reached.
 
 ## Why CirKit
 
-- **Declarative**: circuits are JSON files, not code. Change topology without touching Python.
-- **LLM-agnostic**: the engine calls `claude -p` via subprocess; swap any CLI-accessible model with no code changes.
-- **Reproducible**: same circuit + same prompt produces the same output (Motor caches by input content hash).
+**Declarative over imperative.** In most LLM frameworks you write Python that calls models, inspects results, decides what to retry, and knows when to stop. In CirKit you describe *topology* — which nodes exist and how they connect — and the engine handles iteration, retry, and termination automatically. Changing a circuit means editing JSON, not refactoring code.
+
+**Convergence as a first-class primitive.** Rather than running a fixed number of steps, the engine measures how much each node's output changed between iterations and stops when the circuit has settled. This means simple tasks converge fast (often 1–2 iterations) and complex iterative tasks get as many rounds as they need, up to `max_iter`.
+
+**Reproducible by default.** Motor nodes cache outputs by input content hash. Same circuit + same prompt = same output, regardless of how many times it runs.
 
 ## Quick start
 
@@ -29,4 +37,6 @@ Or launch the visual canvas:
 python ui/server.py    # → http://localhost:8080
 ```
 
-→ [Full quickstart guide](guides/quickstart.md)
+- [Full quickstart guide](guides/quickstart.md)
+- [Circuit design patterns](guides/circuit-design.md)
+- [Codebase architecture](reference/architecture.md)

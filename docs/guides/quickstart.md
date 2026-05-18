@@ -8,7 +8,7 @@
 ## Install
 
 ```bash
-git clone <repo>
+git clone https://github.com/ssm-08/cirkit
 cd cirkit
 pip install -e .
 ```

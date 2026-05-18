@@ -4,17 +4,33 @@ The CirKit engine runs a **synchronous Jacobi iteration** — every node reads t
 
 ## Phases
 
+```mermaid
+flowchart TD
+    A[Initialize all outputs to ZERO] --> B[Inject user_prompt\ninto Battery states]
+    B --> C[Bootstrap: run no-in-edge\nnodes once]
+    C --> D[Snapshot prev_outputs]
+    D --> E[Step each node\nfrom snapshot]
+    E --> F[Compute aggregate_delta]
+    F --> G{delta < epsilon?}
+    G -->|yes| H[Converged — return]
+    G -->|no| I{consensus_locked\nand Sink has output?}
+    I -->|yes| J[Early exit — return]
+    I -->|no| K{max_iter\nreached?}
+    K -->|yes| L[Non-convergent — return]
+    K -->|no| D
+```
+
 ### Phase A — Initialize
 
 All node outputs start as `Signal.ZERO`. A `RunState` object is created to track outputs, per-node state dicts, and delta history.
 
 ### Phase B — Inject user prompt
 
-The engine injects the user prompt string into every Battery node's state dict (`state["user_prompt"]`). This happens before any iteration runs.
+The engine writes the user prompt string into every Battery node's state dict (`state["user_prompt"]`) before any iteration runs. This is how the user's input enters the circuit without being hardcoded into the circuit JSON.
 
 ### Phase C — R9 Bootstrap
 
-Nodes with no in-edges (typically Batteries) are run once before iteration 0. This seeds their outputs so downstream nodes see real content on the first iteration rather than ZERO.
+Nodes with no in-edges (typically Batteries) are stepped once before iteration 0. This seeds their outputs so downstream nodes see real content on the first iteration rather than ZERO. Without the bootstrap, every node would receive only ZERO inputs on iteration 0 and produce ZERO outputs — the circuit would never start.
 
 ### Phase D — Main loop
 
@@ -47,11 +63,11 @@ class RunResult:
 
 If `max_iter` is reached without `delta < epsilon`, the engine returns normally with `converged = False` — no exception is raised. The output is whatever the Sink last collected.
 
-Non-convergence in feedback-loop circuits usually means the motors are still debating. Options:
+Non-convergence in feedback-loop circuits usually means the motors are still debating. Causes and fixes:
 
-- Increase `max_iter`
-- Lower the AND-Gate `threshold` (0.45–0.55 is the sweet spot)
-- Check that Motor system prompts rate confidence on completeness, not on outcome
+- **AND-Gate threshold too high**: motors can't produce high enough confidence on iterative tasks. Lower to 0.45–0.55.
+- **Wrong confidence semantics**: Motor system prompt rates confidence on outcome ("no bugs found → high confidence") rather than completeness. The gate blocks, sends `[BLOCKED]` as feedback, and the motors can't improve. Fix the system prompt.
+- **Feedback from a blocked gate**: the feedback wire points to the AND-Gate rather than the synthesizer. Blocked gate emits `[BLOCKED: insufficient confidence]` as content — useless for refinement.
 
 ## Callback
 
