@@ -12,8 +12,8 @@
   "wires": [
     { "from": "ctx",         "to": "writer",      "role": "context"  },
     { "from": "ctx",         "to": "security",    "role": "context"  },
-    { "from": "writer",      "to": "gate",        "role": "peer"     },
-    { "from": "security",    "to": "gate",        "role": "peer"     },
+    { "from": "writer",      "to": "gate",        "role": "context"  },
+    { "from": "security",    "to": "gate",        "role": "context"  },
     { "from": "gate",        "to": "synthesizer", "role": "context"  },
     { "from": "synthesizer", "to": "out",         "role": "context"  },
     { "from": "synthesizer", "to": "writer",      "role": "feedback" },

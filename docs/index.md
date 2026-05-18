@@ -8,8 +8,8 @@ The diagram below is the `examples/pr_review.json` circuit. Two motors independe
 flowchart LR
     bat[Battery] -->|context| ra[Motor · code review]
     bat -->|context| rb[Motor · security]
-    ra -->|peer| gate[AND-Gate]
-    rb -->|peer| gate
+    ra -->|context| gate[AND-Gate]
+    rb -->|context| gate
     gate -->|context| syn[Motor · synthesizer]
     syn -->|context| sink[Sink]
     syn -.->|feedback| ra
