@@ -38,9 +38,11 @@ See [Node Config reference](../reference/node-config.md) for all config fields.
 
 Motor assembles the prompt in sections:
 
-- Wires with `role: context` → `[CONTEXT]` section
-- Wires with `role: peer` → `[PEER OUTPUTS]` section (multiple peers enumerated as `PEER 1:`, `PEER 2:`, etc.)
-- Wires with `role: feedback` → `[FEEDBACK FROM PREVIOUS ITERATION]` section
+- Wires with `role: context` → `[CONTEXT]` section — task description, upstream input
+- Wires with `role: peer` → `[PEER OUTPUTS]` section — sibling motor's output from the **previous iteration** (`PEER 1:`, `PEER 2:`, etc.)
+- Wires with `role: feedback` → `[FEEDBACK FROM PREVIOUS ITERATION]` section — downstream synthesizer's output from the previous iteration
+
+Peer and feedback inputs always carry the previous iteration's output — not the current one. On iteration 1, a motor with incoming peer or feedback wires sees `Signal.ZERO` from those wires (filtered out) and works from context alone. Real peer and feedback content arrives starting iteration 2.
 
 The LLM output must end with `{"confidence": X}` on the last non-empty line. If absent, confidence is estimated from output length and hedge phrases.
 

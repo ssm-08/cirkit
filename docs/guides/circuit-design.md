@@ -1,38 +1,53 @@
 # Circuit Design Patterns
 
+## How iteration works — the basics
+
+Before picking a pattern, understand the iteration model:
+
+- **All nodes fire every iteration**, using the previous iteration's outputs as inputs.
+- **Peer and feedback wires have a 1-iteration lag** — a node with a peer wire from a sibling sees `Signal.ZERO` on iter 1 (sibling had no output yet) and real content starting iter 2.
+- **Iter 1 is always partially blind** — motors with peer wires haven't seen their siblings' work yet. Full collaboration starts iter 2–3.
+- **Cached nodes are free** — if a node's inputs didn't change, it returns its previous output without doing any work. No LLM call.
+
+---
+
 ## Pattern 1 — Linear pipeline
 
-**When to use**: generation tasks — write a report, convert a format, summarize a document. The output improves in a single pass; there is nothing to debate or iterate on.
+**When to use**: sequential generation tasks — draft something, then transform it. One stage feeds the next. No debate, no iteration, no feedback loop.
 
 ```mermaid
 flowchart LR
     bat[Battery] -->|context| d[Motor · drafter]
-    d -->|peer| f[Motor · formatter]
-    f -->|context| sink[Sink]
+    bat          -->|context| f[Motor · formatter]
+    d            -->|context| f
+    f            -->|context| sink[Sink]
 ```
 
-Each motor refines the previous stage's output. Converges in 1–2 iterations once the formatter produces stable output.
+The drafter produces content. The formatter receives both the task (from Battery) and the draft (from drafter) and converts it. Converges in 1–2 iterations once the formatter produces stable output.
 
 ```json
 {
   "config": {"epsilon": 0.05, "max_iter": 3},
   "sink": "out",
   "nodes": [
-    {"id": "task",    "type": "battery", "config": {"content": "Draft resume HTML for:"}},
-    {"id": "drafter", "type": "motor",   "config": {"system": "Draft a prose resume. End with {\"confidence\": 0.9}."}},
-    {"id": "coder",   "type": "motor",   "config": {"system": "Convert the prose resume to clean HTML. End with {\"confidence\": 0.9}."}},
+    {"id": "task",    "type": "battery", "config": {"content": "Build a resume for:"}},
+    {"id": "drafter", "type": "motor",   "config": {"system": "Organize the input into resume sections: Summary, Experience, Education, Skills. Output structured prose only, no HTML."}},
+    {"id": "coder",   "type": "motor",   "config": {"system": "Convert the resume content into a single self-contained HTML file with inline CSS. Output ONLY valid HTML."}},
     {"id": "out",     "type": "sink",    "config": {}}
   ],
   "wires": [
     {"from": "task",    "to": "drafter", "role": "context"},
-    {"from": "drafter", "to": "coder",   "role": "peer"},
+    {"from": "task",    "to": "coder",   "role": "context"},
+    {"from": "drafter", "to": "coder",   "role": "context"},
     {"from": "coder",   "to": "out",     "role": "context"}
   ]
 }
 ```
 
+Battery wires to both motors with `context`. Drafter output flows to formatter with `context` — it's upstream input, not a sibling peer.
+
 !!! tip
-    Don't add a gate or feedback loop to a linear pipeline — there is no disagreement to resolve. Adding one risks oscillation without improvement.
+    Don't add a gate or feedback loop to a linear pipeline. There is no disagreement to resolve. Adding one risks blocking oscillation without improvement.
 
 Example: `examples/resume_html.json`
 
@@ -40,55 +55,64 @@ Example: `examples/resume_html.json`
 
 ## Pattern 2 — Parallel review + consensus gate
 
-**When to use**: tasks where multiple independent specialists must each produce a confident analysis before the output advances. Neither motor sees the other's work — they analyze the same input independently and in parallel.
+**When to use**: tasks where multiple independent specialists must each produce a confident analysis before the output advances. Each motor analyzes the same source independently. Neither sees the other's work.
 
 ```mermaid
 flowchart LR
     bat[Battery] -->|context| ma[Motor A]
-    bat -->|context| mb[Motor B]
-    ma -->|peer| gate[AND-Gate]
-    mb -->|peer| gate
-    gate -->|context| sink[Sink]
+    bat          -->|context| mb[Motor B]
+    ma           -->|context| gate[AND-Gate]
+    mb           -->|context| gate
+    gate         -->|context| sink[Sink]
 ```
 
-The AND-Gate passes only when all inputs exceed the `threshold`. When blocked, it emits `contradiction=1.0`. This triggers the R2 cache bypass in any Motor that receives it as input — forcing a fresh LLM call without needing an explicit retry loop.
+The AND-Gate passes only when ALL non-ZERO inputs exceed the `threshold`. When blocked, it emits `contradiction=1.0`, which forces upstream motors to bypass their cache and re-run on the next iteration.
 
-Use `merge_mode: concat` for this pattern. The gate concatenates the passing outputs and sends them to the Sink. No synthesizer needed.
+Use `merge_mode: concat` — the gate concatenates passing outputs and sends them to Sink. No synthesizer needed.
 
-**Key rules**:
-- Both motors read from Battery directly — they analyze the same input, not each other's output
+**Key rules:**
+- Both motors wire from Battery directly — they analyze the same input independently
 - Gate threshold: 0.45–0.55 for most circuits
-- Do NOT wire motors to each other with `peer` unless you want each to see the other's draft; for independent analysis, only Battery → motor wires are needed
+- Do NOT wire motors to each other — for independent parallel analysis, only `battery → motor` wires are needed. A peer wire between them would make each motor's output depend on the other's.
 
 ---
 
-## Pattern 2b — Parallel review + synthesizer
+## Pattern 2b — Parallel review + synthesizer + feedback
 
-An extension of Pattern 2 for when you want LLM-quality fusion of the passing outputs rather than simple concatenation.
+**When to use**: same as Pattern 2, but you want LLM-quality fusion of the passing outputs AND iterative refinement — motors improve their analysis based on the fused result.
 
 ```mermaid
 flowchart LR
     bat[Battery] -->|context| ma[Motor A]
-    bat -->|context| mb[Motor B]
-    ma -->|peer| gate[AND-Gate]
-    mb -->|peer| gate
-    gate -->|context| syn[Motor · synthesizer]
-    syn -->|context| sink[Sink]
-    syn -.->|feedback| ma
-    syn -.->|feedback| mb
+    bat          -->|context| mb[Motor B]
+    ma           -->|context| gate[AND-Gate]
+    mb           -->|context| gate
+    gate         -->|context| syn[Motor · synthesizer]
+    syn          -->|context| sink[Sink]
+    syn          -.->|feedback| ma
+    syn          -.->|feedback| mb
 ```
 
-The gate uses `merge_mode: synthesize`, which concatenates passing inputs and sets `flags["needs_synthesis"] = True`. The synthesizer Motor receives this flagged content and calls the LLM to fuse it into one coherent output.
+The gate uses `merge_mode: synthesize`, which concatenates passing inputs and sets a flag. The synthesizer Motor reads that flag and calls the LLM to fuse the content into one coherent output.
+
+Feedback wires carry the synthesizer's output back to the motors on the next iteration. Motors see `[FEEDBACK FROM PREVIOUS ITERATION]` in their prompt and can refine their analysis accordingly.
 
 !!! warning "merge_mode: synthesize does not call the LLM"
-    The AND-Gate's `synthesize` mode only concatenates inputs and sets a flag. The downstream synthesizer **Motor** is what actually calls the LLM to produce the fused result. Without the Motor, the flag goes nowhere.
+    `synthesize` mode only concatenates inputs and sets a flag. The downstream synthesizer **Motor** is what actually calls the LLM to produce the fused result. Without the Motor, the flag goes nowhere.
 
-**Feedback**: the synthesizer's output flows back to the motors as `feedback` so they can refine against the fused draft in the next iteration. This is only meaningful when the gate **passes** and the synthesizer receives real content.
+!!! warning "Gate threshold must be low enough to pass on the first real iteration"
+    If the gate blocks every iteration, it emits `[BLOCKED: insufficient confidence]` as content. The synthesizer receives this useless input, produces garbage, and motors get garbage feedback. Lower the threshold to 0.45–0.55 so the gate passes when motors produce normally-confident output.
 
-!!! warning "What happens when the gate blocks"
-    If the gate blocks (`confidence < threshold`), it emits `content="[BLOCKED: insufficient confidence]"` to the synthesizer. The synthesizer Motor receives this, bypasses its cache (R2: `contradiction=1.0`), and calls the LLM with useless input. The resulting feedback to the motors is low-quality. Retries still happen — the changing synthesizer output changes the motors' cache keys, triggering fresh calls — but without useful feedback content.
+**Iteration walkthrough for this pattern:**
 
-    This is why the gate threshold must be set low enough (0.45–0.55) that it passes on the first iteration with normally-confident motor outputs. A gate that blocks frequently will produce garbage feedback loops rather than useful iteration.
+| Iter | Motors see | Gate sees | Synthesizer sees |
+|------|-----------|-----------|-----------------|
+| 1 | Battery only (no feedback yet) | Previous iter outputs (ZERO) → blocked | Gate output (ZERO) → nothing |
+| 2 | Battery + ZERO feedback (filtered) → cached | Motor outputs from iter 1 → passes | Gate blocked output from iter 1 → low-quality fusion |
+| 3 | Battery + low-quality feedback → refine | Motor outputs from iter 2 (cached) → passes | Gate passing output from iter 2 → good fusion |
+| 4 | Battery + good feedback → converge | … | … |
+
+The pipeline takes 2–3 iterations to "warm up" before useful feedback flows. This is expected — not a sign of misconfiguration.
 
 Example: `examples/pr_review.json`
 
@@ -101,11 +125,11 @@ Example: `examples/pr_review.json`
 ```mermaid
 flowchart LR
     bat[Battery] -->|context| clf[Motor · classifier]
-    clf -->|context| rtr[Router]
-    rtr -->|branch: high| fast[Motor · fast path]
-    rtr -->|branch: low| deep[Motor · deep path]
-    fast -->|context| sink[Sink]
-    deep -->|context| sink
+    clf          -->|context| rtr[Router]
+    rtr          -->|branch: high| fast[Motor · fast path]
+    rtr          -->|branch: low| deep[Motor · deep path]
+    fast         -->|context| sink[Sink]
+    deep         -->|context| sink
 ```
 
 The classifier scores the input and emits a confidence signal. The Router inspects that signal and sends it down the matching branch.
@@ -145,25 +169,19 @@ RIGHT: "Output confidence: 0.9 if you reviewed all aspects of the change thoroug
 
 **Symptom**: reviewer output is generic; ignores the specific content it should critique.
 
-**Cause**: only `battery → reviewer` wire was added. Reviewer sees the task but not the writer's output.
+**Cause**: only `battery → reviewer (context)` wire was added. Reviewer sees the task but not the writer's output.
 
-**Fix**: add `writer → reviewer` with `role: peer`. Note that in Pattern 2 (parallel independent reviewers), this wire is intentionally absent — each motor analyzes the same source independently. Only add the peer wire if you want one motor to explicitly review another's output.
+**Fix**: add `writer → reviewer (peer)`. The reviewer needs the draft to critique it.
+
+Note: in Pattern 2 (parallel independent reviewers), this wire is intentionally absent — each motor analyzes the same source independently. Only add the peer wire when you explicitly want one motor to read and respond to another's output.
 
 ### Feedback from a blocked gate
 
 **Symptom**: motors oscillate; feedback content is `[BLOCKED: insufficient confidence]`.
 
-**Cause**: feedback wire points to the AND-Gate directly rather than to a downstream synthesizer. A blocked gate emits `[BLOCKED]` as content.
+**Cause**: feedback wire points to the AND-Gate directly rather than a downstream synthesizer. A blocked gate emits `[BLOCKED]` as content — not a real analysis.
 
-**Fix**: never wire feedback from the gate. Wire it from the synthesizer — or, if you don't need LLM-quality synthesis, use Pattern 2 (gate directly to sink) and omit the feedback loop entirely.
-
-### Epsilon too high for your topology
-
-**Symptom**: circuit exits after 1 iteration even though output quality is low.
-
-**Cause**: `aggregate_delta` is a mean across *all* nodes, including constant-output nodes. A Sink always emits `Signal.ZERO`, so its delta is always 0. In a 5-node circuit with 1 active Motor, the Motor's real delta is diluted by 5 in the aggregate.
-
-**Fix**: use `epsilon` around 0.03–0.05. For circuits with many passive nodes relative to active ones, go lower (0.01). See [Convergence](../concepts/convergence.md) for the tuning formula.
+**Fix**: wire feedback from the synthesizer. If you don't need LLM-quality synthesis, use Pattern 2 (gate directly to sink) and skip the feedback loop entirely.
 
 ### AND-Gate threshold above 0.6
 
@@ -174,3 +192,11 @@ RIGHT: "Output confidence: 0.9 if you reviewed all aspects of the change thoroug
 ### Redundant Resistor
 
 If a Resistor's `threshold` equals the downstream AND-Gate's `threshold`, it adds nothing — the gate already rejects any input below its threshold. Only use a Resistor when you need to raise the bar for one specific input *above* the general gate threshold.
+
+### Peer wire between independent reviewers
+
+**Symptom**: motor B's output is influenced by motor A's draft even though they're meant to analyze independently.
+
+**Cause**: `motor_a → motor_b (peer)` wire was added when both motors should analyze the same source input without awareness of each other.
+
+**Fix**: remove the peer wire. Both motors read from Battery directly. Only add a peer wire when you explicitly want cross-awareness.

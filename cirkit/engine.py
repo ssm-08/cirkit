@@ -61,7 +61,14 @@ def run(circuit: Circuit, user_prompt: str, epsilon: float = None, max_iter: int
 
             new_outputs[nid] = node._maybe_cached_step(grouped, state.node_state[nid])
 
-        agg = aggregate_delta(prev_outputs, new_outputs)
+        miss = {n for n in new_outputs if new_outputs[n] is not prev_outputs[n]}
+        agg = (
+            aggregate_delta(
+                {n: prev_outputs[n] for n in miss},
+                {n: new_outputs[n] for n in miss},
+            )
+            if miss else 0.0
+        )
         state.outputs = new_outputs
         state.delta_history.append(agg)
 

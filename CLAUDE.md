@@ -10,7 +10,7 @@ Signal circuit reasoning engine. Graph of stateful nodes propagate typed Signals
 ## Project layout
 - `cirkit/` — core engine (signal, convergence, graph, engine, llm, confidence)
 - `cirkit/nodes/` — Battery, Sink, Resistor, AndGate, Router, Motor
-- `tests/` — 118 unit tests, all no-LLM except mock motor tests
+- `tests/` — 124 unit tests, all no-LLM except mock motor tests
 - `examples/pr_review.json` — canonical demo circuit (writer+security→gate→synthesizer; feedback from synthesizer back to motors)
 - `examples/resume_html.json` — linear pipeline demo (drafter → HTML coder, no feedback loop)
 - `ui/index.html` — standalone circuit builder UI (single file, no build step)
@@ -24,7 +24,7 @@ Signal circuit reasoning engine. Graph of stateful nodes propagate typed Signals
 - `pip install -e .` — bare install, no test/docs extras; sufficient for running circuits
 
 ## Commands
-- `python -m pytest tests/ -v` — run all 118 tests (fast, <1s, no LLM calls)
+- `python -m pytest tests/ -v` — run all 124 tests (fast, <1s, no LLM calls)
 - `python -m pytest tests/test_engine_no_motor.py -v` — core thesis proof
 - `python -m cirkit run examples\pr_review.json "<prompt>"` — end-to-end (needs claude CLI)
 - `python ui/server.py` — dev UI at http://localhost:8080/ (no Django needed)
@@ -41,6 +41,8 @@ Valid roles: `context` (default) | `feedback` | `peer`. Router wires use `branch
 ## Key invariants
 - `Signal` is frozen; `flags` stored as `MappingProxyType` (truly immutable — `frozen=True` alone doesn't prevent in-place dict mutation); excluded from equality/hash (`compare=False, hash=False`)
 - `_maybe_cached_step` in base Node filters `Signal.ZERO` from cache key (C1) — consistent with Motor. Prevents spurious cache misses when zero-padded inputs arrive.
+- **Cache-miss convergence**: `aggregate_delta` in engine is computed over cache-miss nodes only (`new_outputs[n] is not prev_outputs[n]`). Cache hit = same object = provable delta=0 = excluded from mean. Battery (stable after iter 1) and Sink (always ZERO) self-exclude automatically. No epsilon dilution tuning needed.
+- **1-iter lag**: ALL wires carry prev-iter output. Peer/feedback wires deliver `Signal.ZERO` on iter 1 (sibling/downstream had no output yet). Peer content arrives iter 2+. This is fundamental to the Jacobi model — not a bug.
 - `Battery` requires `"content"` in config — raises `ValueError` at `__init__` time if missing (not deferred to `step()`)
 - Blocked AND-Gate emits `contradiction=1.0` — NOT `Signal.ZERO` (triggers R2 cache bypass upstream)
 - Engine R9 bootstrap: inject `user_prompt` into Battery state BEFORE running input-less nodes
@@ -54,10 +56,11 @@ Valid roles: `context` (default) | `feedback` | `peer`. Router wires use `branch
 - **Feedback source matters**: wire feedback from `synthesizer` (or any node with real output content), never from `gate` when gate may block. Blocked gate sends `[BLOCKED]` which is useless. Synthesizer sends actual fused content motors can refine against.
 - **Resistor before gate is redundant**: if resistor threshold == gate threshold, the resistor adds no value — gate already rejects low-confidence peers. Only use resistor if you want to raise the bar for one peer above the gate's general threshold.
 - **AND-gate threshold sweet spot**: 0.45–0.55 for most cases. Above 0.6 risks blocking oscillation on iterative refinement circuits.
-- **Convergence epsilon is topology-dependent**: `aggregate_delta` is a mean across ALL nodes. Constant-output nodes (Sink always Signal.ZERO) dilute the aggregate. In a 5-node circuit with 1 active Motor, effective sensitivity is ~1/5 of the motor's actual delta. Tune epsilon relative to the fraction of actively-changing nodes.
+- **Convergence epsilon**: `aggregate_delta` scoped to cache-miss nodes only — Battery/Sink self-exclude. Start at `epsilon: 0.05`; lower to 0.01–0.03 for dense feedback loops with many active motors. No manual dilution correction needed.
 - **`accumulate: false` is redundant**: Battery's `accumulate` defaults to `False` — no need to set it explicitly in JSON.
 - **Feedback wire only useful when**: the signal flowing back is meaningful content (synthesizer output, critique text). Never useful when source is a blocked gate.
-- **AND gate ignores wire role**: AndGate.step() collects ALL non-ZERO inputs regardless of role (context/peer/feedback treated identically). Wire role on motor→gate wires is purely semantic/documentary — no functional difference between `peer` and `context` for gate inputs.
+- **Wire role semantics**: `context` = default for all upstream/sequential wires (battery→motor, motor→gate, gate→sink). `peer` = Motor-to-Motor sibling awareness only (reviewer reading writer's draft; bidirectional = two separate wires). `feedback` = back-edge structural requirement (downstream→upstream); also frames signal as "refine against this" in motor prompt. Only Motor uses role framing — AND-gate, Resistor, Sink ignore role entirely.
+- **motor→gate wires use `context` not `peer`**: AND-gate ignores role, but `context` is semantically correct (gate is downstream of motors, not a sibling).
 - **Reviewer needs peer wire from writer**: In writer+reviewer circuits, battery→reviewer gives task context but reviewer CANNOT see the written content without a `writer→reviewer (peer)` wire. Always add this wire or reviewer has nothing to review.
 - **Parallel independent reviewers need no peer wires between them**: If two motors both analyze the same input (e.g., code-review + security-review of the same PR), only `battery → each motor` wires are needed. Do NOT add `motor_A → motor_B (peer)` unless you explicitly want one to see the other's draft.
 - **merge_mode: synthesize does NOT call the LLM**: AND-Gate `synthesize` mode only concatenates inputs and sets `flags["needs_synthesis"] = True`. A downstream synthesizer Motor reads that flag and does the actual LLM call. Without the Motor, the flag does nothing. `concat` mode suffices if you don't need LLM-quality fusion — wire gate directly to Sink.

@@ -13,33 +13,35 @@ delta(prev, curr) = 0.6 × metric_distance + 0.4 × content_change
 - `metric_distance` = Euclidean norm of `(Δconf, Δcontra, Δurgency, Δrelevance)` / 2, clamped to `[0, 1]`
 - `content_change` = 1 if `SHA1(content)` changed, 0 if identical
 
-The 0.6/0.4 weighting treats content change as less decisive than metric drift — a node that produces the same text but with higher confidence should still count as progressing.
+The 0.6/0.4 weighting treats content change as less decisive than metric drift — a node that produces the same text but with higher confidence still counts as progressing.
 
 ## Aggregate delta
 
+The engine computes delta only over **cache-miss nodes** — nodes whose output changed from the previous iteration. Nodes with a cache hit (identical inputs → identical output object) contribute a provable delta of zero and are excluded from the mean.
+
 ```
-aggregate_delta = mean(delta(node) for all nodes)
+active_nodes = {n for n in all_nodes if output_changed(n)}
+aggregate_delta = mean(delta(n) for n in active_nodes)
 ```
 
-The circuit converges when `aggregate_delta < epsilon`.
+If no nodes changed (everything cached), `aggregate_delta = 0.0` and the circuit converges immediately — nothing is still moving.
 
-## Epsilon dilution — the critical tuning issue
+This means Battery (stable after iteration 1) and Sink (always outputs `Signal.ZERO`) are automatically excluded from the convergence calculation. Only nodes that are actually changing drive the delta.
 
-`aggregate_delta` is a mean across **all** nodes, including constant-output nodes. A Sink always emits `Signal.ZERO`, so its delta is always 0. In a 5-node circuit with 1 actively-changing Motor, the Motor's real delta is diluted by a factor of 5 in the aggregate.
+## Epsilon tuning
 
-**Rule**: in a circuit with N total nodes and M actively-changing nodes, effective epsilon sensitivity is approximately `epsilon × (N / M)`.
+`epsilon` is the convergence threshold. The circuit stops when `aggregate_delta < epsilon`.
 
-For a typical 5-node PR-review circuit (Battery + 2 Motors + AndGate + Sink), only the Motors and gate change between iterations. Use `epsilon` around 0.05; for circuits where only 1 of 8 nodes is active, consider 0.01.
-
-## Practical tuning guide
+Since only active nodes contribute to the mean, epsilon directly reflects what the changing nodes are doing — no dilution from stable nodes. Start at `epsilon: 0.05` and adjust based on observed behavior:
 
 | Situation | Recommended epsilon |
 |-----------|---------------------|
-| Linear pipeline (1–2 active nodes) | 0.05–0.1 |
-| Parallel review + gate (3–4 active) | 0.03–0.05 |
-| Dense feedback loop (5+ active) | 0.01–0.03 |
+| Linear pipeline, converges fast | 0.05–0.1 |
+| Parallel review + gate | 0.03–0.05 |
+| Dense feedback loop with many active motors | 0.01–0.03 |
 
-Start at `epsilon: 0.05` and lower if the circuit exits too early before quality stabilizes.
+If the circuit exits too early (output quality low): lower epsilon.  
+If the circuit runs too many iterations unnecessarily: raise epsilon.
 
 ## max_iter as a safety net
 

@@ -1,6 +1,58 @@
 # Engine Loop
 
-The CirKit engine runs a **synchronous Jacobi iteration** — every node reads the _previous_ round's outputs before any node writes its new output. This prevents ordering artifacts and makes circuits deterministic regardless of node evaluation order.
+The CirKit engine runs a **synchronous Jacobi iteration** — every node reads the _previous_ iteration's outputs before producing its new output. No node can see another node's output from the same iteration. This makes circuits deterministic regardless of node evaluation order.
+
+## How a single iteration works
+
+Each iteration is three steps:
+
+1. **Snapshot** — copy all current outputs as `prev_outputs`
+2. **Step every node** — each node reads from the snapshot (not live outputs), produces a new output
+3. **Check convergence** — compute delta between snapshot and new outputs; if low enough, stop
+
+Because every node reads from the snapshot, the order nodes are stepped within an iteration doesn't matter. A motor can't see its sibling's new output until the next iteration.
+
+## A concrete walkthrough
+
+Consider a circuit: `battery → writer → reviewer → AND-Gate → synthesizer → sink`, with `synthesizer → writer (feedback)` and `synthesizer → reviewer (feedback)`.
+
+**Before iter 1:** All outputs are `Signal.ZERO`. Battery fires once during bootstrap to seed its output.
+
+**Iter 1:**
+```
+battery   → outputs task prompt (same every iter, cached after this)
+writer    → sees [battery=task]. No feedback yet (ZERO, filtered). → produces draft_v1
+reviewer  → sees [battery=task, writer=ZERO(filtered)]. No draft to read yet. → blind review
+AND-Gate  → sees [writer=ZERO, reviewer=ZERO from prev]. No votes yet. → blocked
+synthesizer → sees [gate=ZERO from prev]. Nothing to fuse. → ZERO output
+```
+
+**Iter 2:**
+```
+writer    → sees [battery=task, synthesizer=ZERO(feedback, filtered)] → cached (same inputs) → draft_v1
+reviewer  → sees [battery=task, writer=draft_v1(peer)] → NOW has draft → review_v1
+AND-Gate  → sees [writer=draft_v1, reviewer=blind_review from iter 1] → may pass
+synthesizer → sees [gate=blocked from iter 1] → low quality synthesis (gate sent [BLOCKED])
+```
+
+**Iter 3:**
+```
+writer    → sees [battery=task, synthesizer=synthesis_v1(feedback)] → new input → draft_v2
+reviewer  → sees [battery=task, writer=draft_v1(peer, iter 2 was cached)] → review_v1 (cached)
+AND-Gate  → sees [writer=draft_v1, reviewer=review_v1] → passes → real synthesis input
+synthesizer → sees [gate=real content] → synthesis_v2 (good quality)
+```
+
+**Iter 4:**
+```
+writer    → sees [battery=task, synthesizer=synthesis_v2(feedback)] → refines → draft_v3
+reviewer  → sees [battery=task, writer=draft_v2(peer)] → review_v2
+...outputs stabilize → delta < epsilon → converged
+```
+
+The key takeaway: **signals travel one iteration at a time**. Peer and feedback wires always carry the *previous* iteration's output. Iter 1 is always partially blind. Full collaboration starts iter 2–3.
+
+---
 
 ## Phases
 
@@ -10,7 +62,7 @@ flowchart TD
     B --> C[Bootstrap: run no-in-edge\nnodes once]
     C --> D[Snapshot prev_outputs]
     D --> E[Step each node\nfrom snapshot]
-    E --> F[Compute aggregate_delta]
+    E --> F[Compute delta over\ncache-miss nodes]
     F --> G{delta < epsilon?}
     G -->|yes| H[Converged — return]
     G -->|no| I{consensus_locked\nand Sink has output?}
@@ -28,7 +80,7 @@ All node outputs start as `Signal.ZERO`. A `RunState` object is created to track
 
 The engine writes the user prompt string into every Battery node's state dict (`state["user_prompt"]`) before any iteration runs. This is how the user's input enters the circuit without being hardcoded into the circuit JSON.
 
-### Phase C — R9 Bootstrap
+### Phase C — Bootstrap
 
 Nodes with no in-edges (typically Batteries) are stepped once before iteration 0. This seeds their outputs so downstream nodes see real content on the first iteration rather than ZERO. Without the bootstrap, every node would receive only ZERO inputs on iteration 0 and produce ZERO outputs — the circuit would never start.
 
@@ -38,14 +90,22 @@ For each iteration from 0 to `max_iter − 1`:
 
 1. **Snapshot**: copy all current outputs as `prev_outputs`
 2. **Step each node**: call `_maybe_cached_step(inputs_from_prev, state)` on every node
-3. **Compute delta**: `aggregate_delta(prev_outputs, curr_outputs)` — mean across all nodes
-4. **Check convergence (R10)**: if `delta < epsilon`, exit with `converged = True`
-5. **Check early exit (R4/G14)**: if `consensus_locked` flag is set AND the Sink has received positive-confidence content, exit early
-6. **Fire callback**: `on_iter(iteration, outputs, delta)` if provided
+3. **Compute delta**: mean over nodes that produced a different output than last iteration (cache misses only — cached nodes contribute zero delta and are excluded from the mean)
+4. **Check convergence**: if `delta < epsilon`, exit with `converged = True`
+5. **Check early exit**: if `consensus_locked` flag is set AND the Sink has received positive-confidence content, exit early
+6. **Fire callback**: `on_iter(iteration, delta, node_info)` if provided
 
 ### Phase E — Extract output
 
 The Sink node's `state["last_input"]` is returned as the circuit's final output in a `RunResult`.
+
+## Caching
+
+Every node uses a lazy cache: if its inputs are identical to the previous call, it returns the cached output without doing any work. For Motors, this means no LLM call. For all other nodes, no recomputation.
+
+The cache key is the set of non-ZERO input content hashes. ZERO signals are filtered before the key is built — this prevents cache misses when a peer wire delivers ZERO (no output yet) versus an actual signal.
+
+Convergence delta is computed only over nodes that had a cache miss — nodes that produced new output. Nodes with cache hits contribute nothing to the mean, which means Battery (stable after iter 1) and Sink (always ZERO) are automatically excluded. Convergence reflects only what's actually changing.
 
 ## RunResult
 
@@ -74,7 +134,7 @@ Non-convergence in feedback-loop circuits usually means the motors are still deb
 Pass `on_iter` to `run()` to receive live iteration events:
 
 ```python
-def on_iter(iteration: int, outputs: dict[str, Signal], delta: float):
+def on_iter(iteration: int, delta: float, node_info: dict):
     print(f"iter {iteration}, delta={delta:.4f}")
 
 result = run(circuit, "my prompt", on_iter=on_iter)
