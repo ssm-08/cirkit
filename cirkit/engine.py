@@ -88,18 +88,6 @@ def run(circuit: Circuit, user_prompt: str, epsilon: float = None, max_iter: int
             converged = True
             break
 
-        # R4: early-exit on consensus_locked with G14 sink guard.
-        # Require confidence > 0 so a BLOCKED signal (confidence=0) in sink does not
-        # trigger early exit before real content has propagated through.
-        last_input = state.node_state[circuit.sink_id].get("last_input")
-        sink_has_content = (
-            last_input is not None
-            and last_input is not Signal.ZERO
-            and last_input.confidence > 0.0
-        )
-        if any(s.flags.get("consensus_locked") for s in new_outputs.values()) and sink_has_content:
-            converged = True
-            break
 
     final = state.node_state[circuit.sink_id].get("last_input", Signal.ZERO)
 

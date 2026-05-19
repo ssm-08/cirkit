@@ -75,7 +75,6 @@ class Handler(BaseHTTPRequestHandler):
     def _stream(self, circuit, prompt):
         self.send_response(200)
         self.send_header('Content-Type', 'text/plain; charset=utf-8')
-        self.send_header('Transfer-Encoding', 'chunked')
         self.send_header('Cache-Control', 'no-cache')
         self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
@@ -135,12 +134,11 @@ class Handler(BaseHTTPRequestHandler):
     def _chunk(self, data):
         if isinstance(data, str):
             data = data.encode()
-        self.wfile.write(f'{len(data):X}\r\n'.encode() + data + b'\r\n')
+        self.wfile.write(data)
         self.wfile.flush()
 
     def _end(self):
-        self.wfile.write(b'0\r\n\r\n')
-        self.wfile.flush()
+        pass
 
     def log_message(self, fmt, *args):
         print(f'  {self.address_string()}  {fmt % args}')

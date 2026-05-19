@@ -2,21 +2,19 @@
   "config": { "epsilon": 0.05, "max_iter": 5 },
   "sink": "out",
   "nodes": [
-    { "id": "ctx",         "type": "battery",  "config": { "content": "Review the following pull request. Identify bugs, security risks, and quality issues." } },
-    { "id": "writer",      "type": "motor",    "config": { "system": "Produce a code-review report. Focus on correctness, logic, and code quality. Rate your confidence 0.0-1.0 based on how thorough and certain you are. If given a prior fused review as feedback, refine and improve your findings accordingly." } },
-    { "id": "security",    "type": "motor",    "config": { "system": "Audit the PR for security vulnerabilities: injection, auth flaws, data exposure, insecure dependencies. Rate your confidence 0.0-1.0 based on how thorough your review is — confidence reflects completeness of your audit, NOT whether issues were found. If given a prior fused review as feedback, refine your findings." } },
-    { "id": "gate",        "type": "and_gate", "config": { "threshold": 0.5, "early_exit_threshold": 0.9, "merge_mode": "synthesize" } },
-    { "id": "synthesizer", "type": "motor",    "config": { "system": "Fuse the inputs into one coherent final code-review report. Organize findings by: Bugs & Logic, Security, Code Quality. Preserve all findings. Do not editorialize or omit issues." } },
-    { "id": "out",         "type": "sink",     "config": {} }
+    { "id": "ctx",      "type": "battery",  "config": { "content": "Review the following pull request. Identify bugs, security risks, and quality issues." } },
+    { "id": "writer",   "type": "motor",    "config": { "system": "Produce a code-review report. Focus on correctness, logic, and code quality. Rate your confidence 0.0-1.0 based on how thorough and certain you are. If given a combined review as feedback, identify gaps in your analysis and refine." } },
+    { "id": "security", "type": "motor",    "config": { "system": "Audit the PR for security vulnerabilities: injection, auth flaws, data exposure, insecure dependencies. Rate your confidence 0.0-1.0 based on how thorough your review is — confidence reflects completeness, NOT whether issues were found. If given a combined review as feedback, identify gaps and refine." } },
+    { "id": "gate",     "type": "and_gate", "config": { "threshold": 0.5, "early_exit_threshold": 0.9, "merge_mode": "dedupe" } },
+    { "id": "out",      "type": "sink",     "config": {} }
   ],
   "wires": [
-    { "from": "ctx",         "to": "writer",      "role": "context"  },
-    { "from": "ctx",         "to": "security",    "role": "context"  },
-    { "from": "writer",      "to": "gate",        "role": "context"  },
-    { "from": "security",    "to": "gate",        "role": "context"  },
-    { "from": "gate",        "to": "synthesizer", "role": "context"  },
-    { "from": "synthesizer", "to": "out",         "role": "context"  },
-    { "from": "synthesizer", "to": "writer",      "role": "feedback" },
-    { "from": "synthesizer", "to": "security",    "role": "feedback" }
+    { "from": "ctx",      "to": "writer",   "role": "context"  },
+    { "from": "ctx",      "to": "security", "role": "context"  },
+    { "from": "writer",   "to": "gate",     "role": "context"  },
+    { "from": "security", "to": "gate",     "role": "context"  },
+    { "from": "gate",     "to": "out",      "role": "context"  },
+    { "from": "gate",     "to": "writer",   "role": "feedback" },
+    { "from": "gate",     "to": "security", "role": "feedback" }
   ]
 }

@@ -18,9 +18,8 @@ class AndGate(Node):
 
     If passing:
       - Merge content by cfg.get('merge_mode', 'concat'):
-          concat    : join with '\\n---\\n', no LLM call
-          dedupe    : line-level case-insensitive dedup, preserve first-occurrence order
-          synthesize: same as concat + set flags['needs_synthesis']=True
+          concat : join with '\\n---\\n'
+          dedupe : line-level case-insensitive dedup, preserve first-occurrence order
       - metrics = per-channel MIN across all passing inputs
       - R4: if min_confidence >= cfg.get('early_exit_threshold', 0.9):
             set flags['consensus_locked']=True
@@ -56,15 +55,12 @@ class AndGate(Node):
         if any(s.confidence < self.threshold for s in ordered):
             return _BLOCKED
 
-        # Merge content
         if self.merge_mode == "dedupe":
             merged_content = _dedupe_lines(ordered)
         else:
             merged_content = "\n---\n".join(s.content for s in ordered)
 
         flags: dict = {}
-        if self.merge_mode == "synthesize":
-            flags["needs_synthesis"] = True
 
         min_confidence = min(s.confidence for s in ordered)
         min_contradiction = min(s.contradiction for s in ordered)

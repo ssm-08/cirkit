@@ -30,7 +30,7 @@ class Motor(Node):
     """LLM-backed reasoning node.
 
     R1: Role-grouped prompt assembly — [CONTEXT] / [PEER OUTPUTS] / [FEEDBACK FROM PREVIOUS ITERATION]
-    R2: Cache bypass when any input has contradiction >= 0.8 (rejection signal)
+    R2: Cache bypass when any FEEDBACK input has contradiction >= 0.8 (upstream rejection only)
     R3: MOTOR_PREFIX always prepended to user system config — never overridable
     R6: confidence.parse_confidence handles hedge-phrase cap
     On LLMError: logs to stderr, returns Signal.ZERO (never raises)
@@ -74,8 +74,7 @@ class Motor(Node):
         return Signal(content=content, confidence=conf)
 
     def _maybe_cached_step(self, inputs: dict, state: dict) -> Signal:
-        all_signals = [s for signals in inputs.values() for s in signals if s is not Signal.ZERO]
-        if any(s.contradiction >= 0.8 for s in all_signals):
+        if any(s.contradiction >= 0.8 for s in inputs.get("feedback", []) if s is not Signal.ZERO):
             return self._call_llm(inputs, state)
         cache = state.setdefault("cache", OrderedDict())
         key = tuple(

@@ -51,26 +51,6 @@ def test_dedupe_preserves_first_occurrence_order():
     assert "third" in lines
 
 
-def test_synthesize_mode_sets_flag():
-    g = make_gate("synthesize")
-    s1 = Signal(content="part A", confidence=0.8)
-    s2 = Signal(content="part B", confidence=0.9)
-    out = g.step({"context": [s1], "peer": [s2]}, {})
-    assert out.flags.get("needs_synthesis") is True
-    assert "part A" in out.content
-    assert "part B" in out.content
-
-
-def test_synthesize_content_same_as_concat():
-    concat_g = make_gate("concat")
-    synth_g = make_gate("synthesize")
-    s1 = Signal(content="X", confidence=0.8)
-    s2 = Signal(content="Y", confidence=0.8)
-    concat_out = concat_g.step({"context": [s1], "peer": [s2]}, {})
-    synth_out = synth_g.step({"context": [s1], "peer": [s2]}, {})
-    assert concat_out.content == synth_out.content
-
-
 def test_early_exit_sets_consensus_locked():
     g = make_gate("concat", threshold=0.5, early_exit_threshold=0.7)
     s1 = Signal(content="a", confidence=0.85)
