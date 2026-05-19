@@ -62,7 +62,7 @@ Valid roles: `context` (default) | `feedback` | `peer`. Router wires use `branch
 - **motor→gate wires use `context` not `peer`**: AND-gate ignores role, but `context` is semantically correct (gate is downstream of motors, not a sibling).
 - **Reviewer needs peer wire from writer**: In writer+reviewer circuits, battery→reviewer gives task context but reviewer CANNOT see the written content without a `writer→reviewer (peer)` wire. Always add this wire or reviewer has nothing to review.
 - **Parallel independent reviewers need no peer wires between them**: If two motors both analyze the same input (e.g., code-review + security-review of the same PR), only `battery → each motor` wires are needed. Do NOT add `motor_A → motor_B (peer)` unless you explicitly want one to see the other's draft.
-- **AND-Gate merge_mode**: only `concat` and `dedupe` are valid — anything else raises `ValueError`. For LLM-quality fusion, wire gate output to a downstream synthesizer Motor; the Motor synthesizes unconditionally from its input content, no special flag needed.
+- **AND-Gate merge_mode**: only `concat` and `dedupe` are valid — anything else raises `ValueError`. Wire gate to Sink directly, or wire `gate → motor (feedback)` for iterative refinement — the gate's merged content is the feedback.
 - **Gate-block behavior**: gate merges content FIRST, then applies threshold check. Blocked signal has `contradiction=1.0, confidence=0.0, content=<merged>`. Motors get real content to refine against; R2 cache bypass still fires. No-inputs case (all ZERO) returns empty signal.
 
 ## Workflow

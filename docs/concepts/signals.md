@@ -43,10 +43,12 @@ This distinction matters for AND-Gate: if motors rate confidence on outcome ("no
 Each iteration, the engine computes a delta between the previous and current output for every node:
 
 ```
-delta = 0.6 × metric_distance + 0.4 × content_change
+delta = 0.9 × metric_distance + 0.1 × content_change
 ```
 
 `metric_distance` = Euclidean norm of `(confidence, contradiction, urgency, relevance)` / 2, clamped to `[0, 1]`.
 `content_change` = 1 if SHA1(content) changed, 0 otherwise.
+
+The 0.9/0.1 weighting is intentional — LLMs produce slightly different text on every call even with identical prompts, so content drift is noise. Metric stability is the real convergence signal.
 
 The circuit converges when `mean(delta across all nodes) < epsilon`. See [Convergence](convergence.md) for tuning guidance.

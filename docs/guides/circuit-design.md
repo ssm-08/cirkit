@@ -66,48 +66,14 @@ flowchart LR
 
 The AND-Gate passes only when ALL non-ZERO inputs exceed the `threshold`. When blocked, it emits `contradiction=1.0` with the **real merged content** of all inputs — not a placeholder string. This forces upstream motors to bypass their cache (R2) and re-run with the actual combined output as context, so they can identify gaps and refine.
 
-Use `merge_mode: concat` — the gate concatenates passing outputs and sends them to Sink. No synthesizer needed.
+Use `merge_mode: concat` or `dedupe` — the gate merges passing outputs and sends to Sink. Wire `gate → motor (feedback)` for iterative refinement; motors receive the merged content and refine on the next iteration.
 
 **Key rules:**
 - Both motors wire from Battery directly — they analyze the same input independently
 - Gate threshold: 0.45–0.55 for most circuits
 - Do NOT wire motors to each other — for independent parallel analysis, only `battery → motor` wires are needed. A peer wire between them would make each motor's output depend on the other's.
 
----
-
-## Pattern 2b — Parallel review + synthesizer + feedback
-
-**When to use**: same as Pattern 2, but you want LLM-quality fusion of the passing outputs AND iterative refinement — motors improve their analysis based on the fused result.
-
-```mermaid
-flowchart LR
-    bat[Battery] -->|context| ma[Motor A]
-    bat          -->|context| mb[Motor B]
-    ma           -->|context| gate[AND-Gate]
-    mb           -->|context| gate
-    gate         -->|context| syn[Motor · synthesizer]
-    syn          -->|context| sink[Sink]
-    syn          -.->|feedback| ma
-    syn          -.->|feedback| mb
-```
-
-The gate concatenates passing inputs (`merge_mode: concat` or `dedupe`). The downstream synthesizer Motor receives the merged output and calls the LLM to produce a coherent fused result — no special gate flag needed.
-
-Feedback wires carry the synthesizer's output back to the motors on the next iteration. Motors see `[FEEDBACK FROM PREVIOUS ITERATION]` in their prompt and can refine their analysis accordingly.
-
-!!! tip "Gate threshold must be low enough to pass on real motor output"
-    Keep threshold at 0.45–0.55. If the gate blocks, it emits the merged content with `contradiction=1.0` — motors still receive real content as feedback and can refine, but convergence requires confidence to reach the threshold.
-
-**Iteration walkthrough for this pattern:**
-
-| Iter | Motors see | Gate sees | Synthesizer sees |
-|------|-----------|-----------|-----------------|
-| 1 | Battery only (no feedback yet) | Previous iter outputs (ZERO) → blocked (empty content) | Gate output (empty) → nothing |
-| 2 | Battery + ZERO feedback (filtered) → cached | Motor outputs from iter 1 → passes | Gate merged content from iter 1 → initial fusion |
-| 3 | Battery + initial feedback → refine | Motor outputs from iter 2 (cached) → passes | Gate passing output from iter 2 → good fusion |
-| 4 | Battery + good feedback → converge | … | … |
-
-The pipeline takes 2–3 iterations to "warm up" before useful feedback flows. This is expected — not a sign of misconfiguration.
+See `examples/pr_review.json` for the canonical implementation of this pattern with feedback.
 
 ---
 

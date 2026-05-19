@@ -20,7 +20,7 @@ See [Node Config reference](../reference/node-config.md) for all config fields.
 
 - `content` is **required** — raises `ValueError` at load time if missing.
 - Output confidence is always 1.0.
-- `accumulate: true` (optional, default `false`): appends incoming feedback signals to the emitted content each iteration. Use when you want the battery to "remember" feedback from a synthesizer and pass it downstream in subsequent rounds.
+- `accumulate: true` (optional, default `false`): appends incoming feedback signals to the emitted content each iteration. Use when you want the battery to "remember" feedback from a downstream motor and pass it downstream in subsequent rounds.
 
 ## Motor
 
@@ -40,7 +40,7 @@ Motor assembles the prompt in sections:
 
 - Wires with `role: context` → `[CONTEXT]` section — task description, upstream input
 - Wires with `role: peer` → `[PEER OUTPUTS]` section — sibling motor's output from the **previous iteration** (`PEER 1:`, `PEER 2:`, etc.)
-- Wires with `role: feedback` → `[FEEDBACK FROM PREVIOUS ITERATION]` section — downstream synthesizer's output from the previous iteration
+- Wires with `role: feedback` → `[FEEDBACK FROM PREVIOUS ITERATION]` section — downstream motor's output from the previous iteration
 
 Peer and feedback inputs always carry the previous iteration's output — not the current one. On iteration 1, a motor with incoming peer or feedback wires sees `Signal.ZERO` from those wires (filtered out) and works from context alone. Real peer and feedback content arrives starting iteration 2.
 
@@ -82,7 +82,7 @@ Use a Resistor to raise the bar for one specific input above what the downstream
 
 **Merge modes:**
 
-- `concat` — join with `\n---\n`. Wire gate directly to Sink, or to a downstream Motor for LLM-quality fusion.
+- `concat` — join with `\n---\n`. Wire gate to Sink, or wire `gate → motor (feedback)` for iterative refinement.
 - `dedupe` — line-level case-insensitive deduplication, preserve first-occurrence order. Best when multiple motors produce overlapping analysis.
 
 When blocked, the gate merges inputs first (same as passing), then emits the merged content with `contradiction = 1.0, confidence = 0.0`. This means upstream Motors receive the actual combined output as feedback — not a useless placeholder. The `contradiction = 1.0` triggers the R2 cache bypass, forcing motors to re-run and refine against the real merged content.

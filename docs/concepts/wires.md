@@ -69,7 +69,7 @@ PEER 2: <content>
 
 **For back-edges — wires that flow downstream-to-upstream.**
 
-In iterative refinement circuits, a downstream synthesizer or reviewer sends its output back upstream so motors can refine their work in the next iteration. These wires travel against the normal graph direction (downstream → upstream), which would normally look like a cycle to the validator. The `feedback` role marks them as intentional back-edges, bypassing cycle detection.
+In iterative refinement circuits, a downstream node (typically an AND-Gate) sends its output back upstream so motors can refine their work in the next iteration. These wires travel against the normal graph direction (downstream → upstream), which would normally look like a cycle to the validator. The `feedback` role marks them as intentional back-edges, bypassing cycle detection.
 
 ```
 [FEEDBACK FROM PREVIOUS ITERATION]
@@ -78,12 +78,12 @@ In iterative refinement circuits, a downstream synthesizer or reviewer sends its
 
 **Use feedback for:**
 
-- `synthesizer → motor` — fused result feeding back to upstream reviewers for refinement
+- `gate → motor` — gate's merged output feeding back to upstream motors for refinement
 - Any wire where the sender is downstream of the receiver in the normal graph flow
 
 **Feedback is structurally required.** Without the `feedback` role, a downstream-to-upstream wire fails graph validation with a cycle error. It isn't optional labeling — it's what makes the back-edge legal.
 
-**Feedback also has a 1-iteration lag**, like all wires. A motor sees feedback from the synthesizer's *previous* iteration output, not the current one.
+**Feedback also has a 1-iteration lag**, like all wires. A motor sees feedback from the gate's *previous* iteration output, not the current one.
 
 
 ---

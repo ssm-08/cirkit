@@ -41,7 +41,7 @@ Runs the circuit and returns a `RunResult`.
 | `user_prompt` | `str` | The user's input; injected into all Battery nodes |
 | `epsilon` | `float \| None` | Override circuit epsilon; `None` uses circuit default |
 | `max_iter` | `int \| None` | Override max iterations; `None` uses circuit default |
-| `on_iter` | `callable \| None` | Called after each iteration with `(iteration, outputs, delta)` |
+| `on_iter` | `callable \| None` | Called after each iteration with `(iteration: int, delta: float, node_info: dict)` |
 
 ## RunResult
 

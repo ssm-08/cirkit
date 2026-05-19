@@ -14,39 +14,36 @@ Because every node reads from the snapshot, the order nodes are stepped within a
 
 ## A concrete walkthrough
 
-Consider a circuit: `battery → writer → reviewer → AND-Gate → synthesizer → sink`, with `synthesizer → writer (feedback)` and `synthesizer → reviewer (feedback)`.
+Consider a circuit: `battery → writer → reviewer → AND-Gate → sink`, with `gate → writer (feedback)` and `gate → reviewer (feedback)`. This is the canonical `pr_review.json` pattern.
 
 **Before iter 1:** All outputs are `Signal.ZERO`. Battery fires once during bootstrap to seed its output.
 
 **Iter 1:**
 ```
-battery   → outputs task prompt (same every iter, cached after this)
-writer    → sees [battery=task]. No feedback yet (ZERO, filtered). → produces draft_v1
-reviewer  → sees [battery=task, writer=ZERO(filtered)]. No draft to read yet. → blind review
-AND-Gate  → sees [writer=ZERO, reviewer=ZERO from prev]. No votes yet. → blocked
-synthesizer → sees [gate=ZERO from prev]. Nothing to fuse. → ZERO output
+battery  → outputs task prompt (same every iter, cached after this)
+writer   → sees [battery=task]. No feedback yet (ZERO, filtered). → produces draft_v1
+reviewer → sees [battery=task, writer=ZERO(filtered)]. No draft to read yet. → blind review
+AND-Gate → sees [writer=ZERO, reviewer=ZERO from prev]. No votes yet. → blocked (empty content)
 ```
 
 **Iter 2:**
 ```
-writer    → sees [battery=task, synthesizer=ZERO(feedback, filtered)] → cached (same inputs) → draft_v1
-reviewer  → sees [battery=task, writer=draft_v1(peer)] → NOW has draft → review_v1
-AND-Gate  → sees [writer=draft_v1, reviewer=blind_review from iter 1] → may pass
-synthesizer → sees [gate=empty content from iter 1 (gate had all-ZERO inputs)] → low-quality fusion
+writer   → sees [battery=task, gate=ZERO(feedback, filtered)] → cached → draft_v1
+reviewer → sees [battery=task, writer=draft_v1(peer)] → NOW has draft → review_v1
+AND-Gate → sees [writer=draft_v1, reviewer=blind_review from iter 1] → may pass
 ```
 
 **Iter 3:**
 ```
-writer    → sees [battery=task, synthesizer=synthesis_v1(feedback)] → new input → draft_v2
-reviewer  → sees [battery=task, writer=draft_v1(peer, iter 2 was cached)] → review_v1 (cached)
-AND-Gate  → sees [writer=draft_v1, reviewer=review_v1] → passes → real synthesis input
-synthesizer → sees [gate=merged content, passing] → synthesis_v2 (good quality)
+writer   → sees [battery=task, gate=merged_v1(feedback)] → new input → draft_v2
+reviewer → sees [battery=task, writer=draft_v1(peer)] → review_v1 (cached)
+AND-Gate → sees [writer=draft_v1, reviewer=review_v1] → passes → merged output → sink
 ```
 
 **Iter 4:**
 ```
-writer    → sees [battery=task, synthesizer=synthesis_v2(feedback)] → refines → draft_v3
-reviewer  → sees [battery=task, writer=draft_v2(peer)] → review_v2
+writer   → sees [battery=task, gate=merged_v2(feedback)] → refines → draft_v3
+reviewer → sees [battery=task, writer=draft_v2(peer)] → review_v2
 ...outputs stabilize → delta < epsilon → converged
 ```
 
