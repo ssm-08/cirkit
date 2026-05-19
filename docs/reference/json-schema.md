@@ -79,56 +79,49 @@ Non-feedback wires must not form cycles. Wires with `role: feedback` are exempt 
 
 ## Complete example
 
+The `examples/pr_review.json` circuit — two independent reviewers, consensus gate, gate feedback:
+
 ```json
 {
   "config": {"epsilon": 0.05, "max_iter": 5},
   "sink": "out",
   "nodes": [
     {
-      "id": "task",
+      "id": "ctx",
       "type": "battery",
       "config": {
-        "content": "You are a senior engineer. Review the following PR:"
+        "content": "Review the following pull request. Identify bugs, security risks, and quality issues."
       }
     },
     {
       "id": "writer",
       "type": "motor",
       "config": {
-        "system": "Draft a review. Rate confidence as JSON on the last line: {\"confidence\": 0.9}."
+        "system": "Produce a code-review report. Focus on correctness, logic, and code quality. Rate your confidence 0.0-1.0 based on how thorough and certain you are."
       }
     },
     {
-      "id": "reviewer",
+      "id": "security",
       "type": "motor",
       "config": {
-        "system": "Critique the draft review. Rate confidence on thoroughness. End with {\"confidence\": 0.85}."
+        "system": "Audit the PR for security vulnerabilities. Rate confidence 0.0-1.0 on completeness of review, not on whether issues were found."
       }
     },
     {
       "id": "gate",
       "type": "and_gate",
-      "config": {"threshold": 0.5, "merge_mode": "synthesize"}
-    },
-    {
-      "id": "synthesizer",
-      "type": "motor",
-      "config": {
-        "system": "Synthesize both inputs into one final review. End with {\"confidence\": 0.95}."
-      }
+      "config": {"threshold": 0.5, "early_exit_threshold": 0.9, "merge_mode": "dedupe"}
     },
     {"id": "out", "type": "sink", "config": {}}
   ],
   "wires": [
-    {"from": "task",        "to": "writer",      "role": "context"},
-    {"from": "task",        "to": "reviewer",    "role": "context"},
-    {"from": "writer",      "to": "reviewer",    "role": "peer"},
-    {"from": "writer",      "to": "gate",        "role": "peer"},
-    {"from": "reviewer",    "to": "gate",        "role": "peer"},
-    {"from": "gate",        "to": "synthesizer", "role": "context"},
-    {"from": "synthesizer", "to": "out",         "role": "context"},
-    {"from": "synthesizer", "to": "writer",      "role": "feedback"},
-    {"from": "synthesizer", "to": "reviewer",    "role": "feedback"}
+    {"from": "ctx",      "to": "writer",   "role": "context"},
+    {"from": "ctx",      "to": "security", "role": "context"},
+    {"from": "writer",   "to": "gate",     "role": "context"},
+    {"from": "security", "to": "gate",     "role": "context"},
+    {"from": "gate",     "to": "out",      "role": "context"},
+    {"from": "gate",     "to": "writer",   "role": "feedback"},
+    {"from": "gate",     "to": "security", "role": "feedback"}
   ]
 }
 ```

@@ -69,7 +69,7 @@ Per-node `config` field reference for all built-in node types.
   "type": "and_gate",
   "config": {
     "threshold": 0.5,
-    "merge_mode": "synthesize",
+    "merge_mode": "dedupe",
     "early_exit_threshold": 0.9
   }
 }
@@ -78,8 +78,8 @@ Per-node `config` field reference for all built-in node types.
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `threshold` | float | **yes** | — | Minimum confidence all non-ZERO inputs must meet to pass |
-| `merge_mode` | string | no | `"concat"` | How to combine passing inputs: `concat`, `dedupe`, or `synthesize` |
-| `early_exit_threshold` | float | no | `1.0` | If min(input confidence) ≥ this, sets `consensus_locked` flag for early circuit exit |
+| `merge_mode` | string | no | `"concat"` | How to combine passing inputs: `concat` or `dedupe` |
+| `early_exit_threshold` | float | no | `0.9` | If min(input confidence) ≥ this, sets `consensus_locked` flag for early circuit exit |
 
 **merge_mode values**:
 
@@ -87,7 +87,6 @@ Per-node `config` field reference for all built-in node types.
 |------|-------------|
 | `concat` | Join content with `\n---\n` separator |
 | `dedupe` | Line-level case-insensitive deduplication, preserve first-occurrence order |
-| `synthesize` | Concat + set `flags["needs_synthesis"] = True` |
 
 When blocked (any input below `threshold`), the gate emits `contradiction = 1.0`. This is NOT `Signal.ZERO` — it triggers the R2 cache bypass in upstream Motors.
 

@@ -11,7 +11,7 @@ Signal circuit reasoning engine. Graph of stateful nodes propagate typed Signals
 - `cirkit/` — core engine (signal, convergence, graph, engine, llm, confidence)
 - `cirkit/nodes/` — Battery, Sink, Resistor, AndGate, Router, Motor
 - `tests/` — 135 unit tests, all no-LLM except mock motor tests
-- `examples/pr_review.json` — canonical demo circuit (writer+security→gate→synthesizer; feedback from synthesizer back to motors)
+- `examples/pr_review.json` — canonical demo circuit (writer+security→gate→sink; gate feedback to both motors)
 - `examples/resume_html.json` — linear pipeline demo (drafter → HTML coder, no feedback loop)
 - `ui/index.html` — standalone circuit builder UI (single file, no build step)
 - `ui/server.py` — stdlib dev server (no Django); run: `python ui/server.py [port]` default 8080
@@ -50,7 +50,7 @@ Valid roles: `context` (default) | `feedback` | `peer`. Router wires use `branch
 - NODE_REGISTRY: populated in `nodes/__init__.py` (all node types including Motor registered there)
 
 ## Circuit design lessons
-- **Linear generation tasks** (resume, report, transform): use simple `battery → motor(s) → sink`. No feedback loop, no gate. Converges in 1–2 iter.
+- **Linear generation tasks** (resume, report, transform): use simple `battery → motor(s) → sink`. No feedback loop, no gate. Converges in 1–2 iter. Each stage works from the previous stage's output — do NOT wire battery directly to every motor. `battery → drafter → coder → sink` is correct; adding `battery → coder` is redundant and creates a skip-stage dependency.
 - **Critic+gate feedback pitfall**: if critic system prompt says "output LOW confidence if issues found", gate blocks every iteration. Fix: lower gate threshold (0.45–0.55) OR remove critic+gate entirely for generation tasks.
 - **Confidence = completeness, not outcome**: Motor system prompts must rate confidence on how thorough the analysis is — NOT on whether issues were found. "HIGH confidence if no vulnerabilities" breaks the gate.
 - **Gate→motor feedback IS viable**: wire `gate → motor (feedback)` directly. Blocked gate now sends real merged content (not `[BLOCKED]`), so motors refine against actual combined output. Use `epsilon: 0.15` for feedback-loop circuits.
@@ -62,7 +62,7 @@ Valid roles: `context` (default) | `feedback` | `peer`. Router wires use `branch
 - **motor→gate wires use `context` not `peer`**: AND-gate ignores role, but `context` is semantically correct (gate is downstream of motors, not a sibling).
 - **Reviewer needs peer wire from writer**: In writer+reviewer circuits, battery→reviewer gives task context but reviewer CANNOT see the written content without a `writer→reviewer (peer)` wire. Always add this wire or reviewer has nothing to review.
 - **Parallel independent reviewers need no peer wires between them**: If two motors both analyze the same input (e.g., code-review + security-review of the same PR), only `battery → each motor` wires are needed. Do NOT add `motor_A → motor_B (peer)` unless you explicitly want one to see the other's draft.
-- **merge_mode: synthesize does NOT call the LLM**: AND-Gate `synthesize` mode only concatenates inputs and sets `flags["needs_synthesis"] = True`. A downstream synthesizer Motor reads that flag and does the actual LLM call. Without the Motor, the flag does nothing. `concat` mode suffices if you don't need LLM-quality fusion — wire gate directly to Sink.
+- **AND-Gate merge_mode**: only `concat` and `dedupe` are valid — anything else raises `ValueError`. For LLM-quality fusion, wire gate output to a downstream synthesizer Motor; the Motor synthesizes unconditionally from its input content, no special flag needed.
 - **Gate-block behavior**: gate merges content FIRST, then applies threshold check. Blocked signal has `contradiction=1.0, confidence=0.0, content=<merged>`. Motors get real content to refine against; R2 cache bypass still fires. No-inputs case (all ZERO) returns empty signal.
 
 ## Workflow

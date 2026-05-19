@@ -32,7 +32,7 @@ synthesizer → sees [gate=ZERO from prev]. Nothing to fuse. → ZERO output
 writer    → sees [battery=task, synthesizer=ZERO(feedback, filtered)] → cached (same inputs) → draft_v1
 reviewer  → sees [battery=task, writer=draft_v1(peer)] → NOW has draft → review_v1
 AND-Gate  → sees [writer=draft_v1, reviewer=blind_review from iter 1] → may pass
-synthesizer → sees [gate=blocked from iter 1] → low quality synthesis (gate sent [BLOCKED])
+synthesizer → sees [gate=empty content from iter 1 (gate had all-ZERO inputs)] → low-quality fusion
 ```
 
 **Iter 3:**
@@ -40,7 +40,7 @@ synthesizer → sees [gate=blocked from iter 1] → low quality synthesis (gate 
 writer    → sees [battery=task, synthesizer=synthesis_v1(feedback)] → new input → draft_v2
 reviewer  → sees [battery=task, writer=draft_v1(peer, iter 2 was cached)] → review_v1 (cached)
 AND-Gate  → sees [writer=draft_v1, reviewer=review_v1] → passes → real synthesis input
-synthesizer → sees [gate=real content] → synthesis_v2 (good quality)
+synthesizer → sees [gate=merged content, passing] → synthesis_v2 (good quality)
 ```
 
 **Iter 4:**
@@ -126,8 +126,8 @@ If `max_iter` is reached without `delta < epsilon`, the engine returns normally 
 Non-convergence in feedback-loop circuits usually means the motors are still debating. Causes and fixes:
 
 - **AND-Gate threshold too high**: motors can't produce high enough confidence on iterative tasks. Lower to 0.45–0.55.
-- **Wrong confidence semantics**: Motor system prompt rates confidence on outcome ("no bugs found → high confidence") rather than completeness. The gate blocks, sends `[BLOCKED]` as feedback, and the motors can't improve. Fix the system prompt.
-- **Feedback from a blocked gate**: the feedback wire points to the AND-Gate rather than the synthesizer. Blocked gate emits `[BLOCKED: insufficient confidence]` as content — useless for refinement.
+- **Wrong confidence semantics**: Motor system prompt rates confidence on outcome ("no bugs found → high confidence") rather than completeness. The gate blocks every iteration because motors never reach the threshold. Fix the system prompt — confidence must reflect thoroughness, not findings.
+- **Feedback wired from a node with no real output yet**: on iteration 1, all nodes start at `Signal.ZERO`. A motor with a feedback wire sees `ZERO` (filtered out) and works from context alone. Real feedback arrives starting iteration 2. This is expected — not a sign of misconfiguration.
 
 ## Callback
 

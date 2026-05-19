@@ -85,8 +85,6 @@ In iterative refinement circuits, a downstream synthesizer or reviewer sends its
 
 **Feedback also has a 1-iteration lag**, like all wires. A motor sees feedback from the synthesizer's *previous* iteration output, not the current one.
 
-!!! warning "Never wire feedback from a blocked AND-Gate"
-    When an AND-Gate blocks, it emits `content="[BLOCKED: insufficient confidence]"` — not a real signal. Wiring feedback from the gate means motors receive this useless content and have nothing to refine against. Always wire feedback from the **synthesizer** (or any node that produces real content), never from the gate.
 
 ---
 

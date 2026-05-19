@@ -11,7 +11,7 @@ A `Signal` is the unit of information that flows between nodes. It is immutable 
 | `contradiction` | `float` | 0.0–1.0. Tension with other signals; ≥ 0.8 triggers upstream cache bypass |
 | `urgency` | `float` | 0.0–1.0. Priority weight (factored into convergence delta) |
 | `relevance` | `float` | 0.0–1.0. Tie-break for Sink selection |
-| `flags` | `Mapping[str, Any]` | Immutable metadata (e.g. `consensus_locked`, `needs_synthesis`) |
+| `flags` | `Mapping[str, Any]` | Immutable metadata (e.g. `consensus_locked`) |
 
 `flags` are excluded from equality and hashing — two signals with identical metrics and content are considered equal regardless of their flags.
 

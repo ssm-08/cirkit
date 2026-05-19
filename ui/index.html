@@ -1229,7 +1229,7 @@ function showNodeInsp(id) {
   if (n.config?.threshold!=null)
     h+=`<div class="fg"><div class="fl">Threshold θ</div><input class="fv" type="number" step="0.05" min="0" max="1" value="${n.config.threshold}" onchange="setCfg('${id}','threshold',+this.value)"></div>`;
   if (n.config?.merge_mode!=null) {
-    const modes=['concat','dedupe','synthesize'];
+    const modes=['concat','dedupe'];
     h+=`<div class="fg"><div class="fl">Merge mode</div><select class="fv" onchange="setCfg('${id}','merge_mode',this.value)">${modes.map(m=>`<option ${n.config.merge_mode===m?'selected':''}>${m}</option>`).join('')}</select></div>`;
   }
   if (n.config?.rule!=null)
@@ -1563,7 +1563,7 @@ function handleEv(ev,body) {
 function runDemo(body) {
   const steps=[
     {iter:1,delta:.4821,msg:'Battery seed propagating · motor nodes computing'},
-    {iter:2,delta:.1810,msg:'AND gate: 2 inputs >= theta -- passing · synthesizer fires'},
+    {iter:2,delta:.1810,msg:'AND gate: 2 inputs >= theta -- passing · merging outputs'},
     {iter:3,delta:.0623,msg:'Feedback dampens contradictions · cache bypass on writer'},
     {iter:4,delta:.0091,msg:'Delta below epsilon -- locking consensus'},
   ];
@@ -1748,7 +1748,7 @@ setTimeout(()=>{
     {type:'battery',  x:28,  y:110, label:'prompt'},
     {type:'motor',    x:220, y:30,  label:'writer',   config:{system:'You are a code writer. Produce clean, working code that satisfies the user prompt.'}},
     {type:'motor',    x:220, y:175, label:'reviewer', config:{system:'You are a code reviewer. Your peer (writer) has produced code — review it for bugs, security issues, and quality. Reference the original prompt for context.'}},
-    {type:'and_gate', x:430, y:102, label:'gate',     config:{threshold:.55,merge_mode:'synthesize'}},
+    {type:'and_gate', x:430, y:102, label:'gate',     config:{threshold:.55,merge_mode:'dedupe'}},
     {type:'sink',     x:594, y:102, label:'out'},
   ];
   defs.forEach(d=>{

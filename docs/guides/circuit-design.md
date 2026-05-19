@@ -18,12 +18,11 @@ Before picking a pattern, understand the iteration model:
 ```mermaid
 flowchart LR
     bat[Battery] -->|context| d[Motor · drafter]
-    bat          -->|context| f[Motor · formatter]
-    d            -->|context| f
+    d            -->|context| f[Motor · formatter]
     f            -->|context| sink[Sink]
 ```
 
-The drafter produces content. The formatter receives both the task (from Battery) and the draft (from drafter) and converts it. Converges in 1–2 iterations once the formatter produces stable output.
+The drafter produces content. The formatter receives the draft and converts it. Converges in 1–2 iterations once the formatter produces stable output. The formatter does not need a direct Battery wire — the drafter's output already carries all the context it needs.
 
 ```json
 {
@@ -37,14 +36,13 @@ The drafter produces content. The formatter receives both the task (from Battery
   ],
   "wires": [
     {"from": "task",    "to": "drafter", "role": "context"},
-    {"from": "task",    "to": "coder",   "role": "context"},
     {"from": "drafter", "to": "coder",   "role": "context"},
     {"from": "coder",   "to": "out",     "role": "context"}
   ]
 }
 ```
 
-Battery wires to both motors with `context`. Drafter output flows to formatter with `context` — it's upstream input, not a sibling peer.
+Battery wires only to the drafter. Drafter output flows to formatter with `context` — it's upstream input, not a sibling peer. Each stage works from the previous stage's output; no node needs to skip stages to read raw user input.
 
 !!! tip
     Don't add a gate or feedback loop to a linear pipeline. There is no disagreement to resolve. Adding one risks blocking oscillation without improvement.
@@ -93,28 +91,23 @@ flowchart LR
     syn          -.->|feedback| mb
 ```
 
-The gate uses `merge_mode: synthesize`, which concatenates passing inputs and sets a flag. The synthesizer Motor reads that flag and calls the LLM to fuse the content into one coherent output.
+The gate concatenates passing inputs (`merge_mode: concat` or `dedupe`). The downstream synthesizer Motor receives the merged output and calls the LLM to produce a coherent fused result — no special gate flag needed.
 
 Feedback wires carry the synthesizer's output back to the motors on the next iteration. Motors see `[FEEDBACK FROM PREVIOUS ITERATION]` in their prompt and can refine their analysis accordingly.
 
-!!! warning "merge_mode: synthesize does not call the LLM"
-    `synthesize` mode only concatenates inputs and sets a flag. The downstream synthesizer **Motor** is what actually calls the LLM to produce the fused result. Without the Motor, the flag goes nowhere.
-
-!!! warning "Gate threshold must be low enough to pass on real motor output"
-    If the gate blocks every iteration, motors receive the merged (but low-confidence) combined output as feedback — they can refine against it, but convergence depends on confidence rising to meet the threshold. Keep threshold at 0.45–0.55 so the gate passes when motors produce normally-confident output.
+!!! tip "Gate threshold must be low enough to pass on real motor output"
+    Keep threshold at 0.45–0.55. If the gate blocks, it emits the merged content with `contradiction=1.0` — motors still receive real content as feedback and can refine, but convergence requires confidence to reach the threshold.
 
 **Iteration walkthrough for this pattern:**
 
 | Iter | Motors see | Gate sees | Synthesizer sees |
 |------|-----------|-----------|-----------------|
-| 1 | Battery only (no feedback yet) | Previous iter outputs (ZERO) → blocked | Gate output (ZERO) → nothing |
-| 2 | Battery + ZERO feedback (filtered) → cached | Motor outputs from iter 1 → passes | Gate blocked output from iter 1 → low-quality fusion |
-| 3 | Battery + low-quality feedback → refine | Motor outputs from iter 2 (cached) → passes | Gate passing output from iter 2 → good fusion |
+| 1 | Battery only (no feedback yet) | Previous iter outputs (ZERO) → blocked (empty content) | Gate output (empty) → nothing |
+| 2 | Battery + ZERO feedback (filtered) → cached | Motor outputs from iter 1 → passes | Gate merged content from iter 1 → initial fusion |
+| 3 | Battery + initial feedback → refine | Motor outputs from iter 2 (cached) → passes | Gate passing output from iter 2 → good fusion |
 | 4 | Battery + good feedback → converge | … | … |
 
 The pipeline takes 2–3 iterations to "warm up" before useful feedback flows. This is expected — not a sign of misconfiguration.
-
-Example: `examples/pr_review.json`
 
 ---
 

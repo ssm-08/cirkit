@@ -66,7 +66,7 @@ sig = Signal(
     contradiction=0.0,
     urgency=0.5,
     relevance=0.5,
-    flags={"needs_synthesis": True},
+    flags={"consensus_locked": True},
 )
 
 # Sentinel

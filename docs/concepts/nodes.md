@@ -68,7 +68,7 @@ Use a Resistor to raise the bar for one specific input above what the downstream
   "type": "and_gate",
   "config": {
     "threshold": 0.5,
-    "merge_mode": "synthesize",
+    "merge_mode": "dedupe",
     "early_exit_threshold": 0.9
   }
 }
@@ -77,14 +77,13 @@ Use a Resistor to raise the bar for one specific input above what the downstream
 | Config | Default | Description |
 |--------|---------|-------------|
 | `threshold` | required | Minimum confidence all inputs must meet |
-| `merge_mode` | `"concat"` | How to combine passing inputs: `concat`, `dedupe`, `synthesize` |
-| `early_exit_threshold` | `1.0` | If min confidence ≥ this, sets `consensus_locked` flag for early circuit exit |
+| `merge_mode` | `"concat"` | How to combine passing inputs: `concat` or `dedupe` |
+| `early_exit_threshold` | `0.9` | If min confidence ≥ this, sets `consensus_locked` flag for early circuit exit |
 
 **Merge modes:**
 
-- `concat` — join with `\n---\n`, no LLM. Wire gate directly to Sink when this is sufficient.
-- `dedupe` — line-level case-insensitive deduplication, preserve first-occurrence order, no LLM
-- `synthesize` — same as `concat`, plus sets `flags["needs_synthesis"] = True`. This flag does **not** call the LLM — it signals a downstream synthesizer Motor to do the actual LLM fusion. Without a Motor downstream, this flag goes nowhere.
+- `concat` — join with `\n---\n`. Wire gate directly to Sink, or to a downstream Motor for LLM-quality fusion.
+- `dedupe` — line-level case-insensitive deduplication, preserve first-occurrence order. Best when multiple motors produce overlapping analysis.
 
 When blocked, the gate merges inputs first (same as passing), then emits the merged content with `contradiction = 1.0, confidence = 0.0`. This means upstream Motors receive the actual combined output as feedback — not a useless placeholder. The `contradiction = 1.0` triggers the R2 cache bypass, forcing motors to re-run and refine against the real merged content.
 

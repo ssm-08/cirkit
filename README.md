@@ -2,19 +2,29 @@
 
 [![CI](https://github.com/ssm-08/cirkit/actions/workflows/ci.yml/badge.svg)](https://github.com/ssm-08/cirkit/actions/workflows/ci.yml)
 
-A signal circuit reasoning engine. Define a graph of nodes in JSON. Signals flow through the graph until outputs stop changing. The LLM is one node type — not the orchestrator.
+Signal circuit reasoning engine. Define a graph of nodes in JSON — signals flow through it until outputs converge. The LLM is one node type, not the orchestrator.
 
-**[Documentation](https://ssm-08.github.io/cirkit/)**
+**[Full documentation →](https://ssm-08.github.io/cirkit/)**
 
 ---
 
-## The core idea
+## The problem
 
-Most LLM frameworks are imperative: you write Python that calls LLMs, decides what to do with results, retries, and knows when to stop. CirKit is declarative: describe the **topology** (which nodes exist, how they're wired) and the engine handles iteration, retry, and termination automatically.
+Most LLM frameworks are imperative: you write Python that calls models, inspects results, decides what to retry, and knows when to stop. As pipelines grow, you end up with ad-hoc orchestration logic spread across your codebase.
 
-**Convergence instead of a fixed step count.** The engine runs iterations until signal delta < ε. Delta measures how much outputs changed since the last iteration. When nothing is changing, the system has settled. You set ε and max_iter; the engine stops itself.
+CirKit is declarative. Describe the **topology** — which nodes exist and how they're wired — and the engine handles iteration, retry, and termination automatically. Changing a pipeline means editing JSON, not refactoring code.
 
-**Propagation cost.** Signals travel one hop per iteration. A four-node chain `A → B → C → D` needs at least 3 iterations for A's output to reach D.
+**Convergence instead of a fixed step count.** The engine runs iterations until signal delta < ε. When nothing is changing, the system has settled. You set ε and `max_iter`; the engine stops itself.
+
+**Signals travel one hop per iteration.** A four-node chain `A → B → C → D` needs at least 3 iterations for A's output to reach D. This is deterministic and inspectable — not a black box.
+
+---
+
+## Prerequisites
+
+- Python 3.11+
+- `claude` CLI installed and authenticated (`claude auth login`) — for circuits with Motor nodes
+- No API keys required — CirKit shells out to the local `claude` CLI
 
 ---
 
@@ -22,11 +32,9 @@ Most LLM frameworks are imperative: you write Python that calls LLMs, decides wh
 
 ```powershell
 pip install -e .
-# or skip install entirely:
+# or run without installing:
 python -m cirkit run <circuit.json> "<prompt>"
 ```
-
-Requires Python 3.11+. No API keys. Uses the local `claude -p` CLI (must be on PATH and logged in).
 
 ---
 
@@ -56,6 +64,61 @@ python -m cirkit run hello.json "What is the capital of France?"
 
 ---
 
+## Node types
+
+| Type | Role |
+|------|------|
+| `battery` | Static signal source — emits fixed content + user prompt every iteration |
+| `motor` | LLM call — assembles prompt from inputs, extracts confidence from output |
+| `resistor` | Single-input threshold filter — passes signal only if confidence ≥ threshold |
+| `and_gate` | Consensus gate — passes when ALL inputs exceed threshold; merges content |
+| `router` | Content-based dispatcher — routes signal to one of N named branches |
+| `sink` | Terminal collector — selects highest-confidence input as circuit output |
+
+**Wire roles** tell a receiving Motor what each signal means:
+
+| Role | Framing in prompt | Use for |
+|------|-------------------|---------|
+| `context` | `[CONTEXT]` | Upstream input — battery→motor, motor→gate, gate→sink |
+| `peer` | `[PEER OUTPUTS]` | Sibling Motor sharing results at the same stage |
+| `feedback` | `[FEEDBACK FROM PREVIOUS ITERATION]` | Back-edge — downstream result looping upstream |
+
+---
+
+## Circuit design patterns
+
+**Linear pipeline** — for generation tasks. Converges in 1–2 iterations, no feedback needed.
+
+```
+battery → drafter → formatter → sink
+```
+
+Example: `examples/resume_html.json`
+
+---
+
+**Parallel reviewers + consensus** — for critique tasks. Multiple independent reviewers must agree before output advances.
+
+```
+battery ──► reviewer_A ──► AND-gate ──► sink
+        └──► reviewer_B ──►    │
+                 ▲              │
+                 └── feedback ──┘
+```
+
+When the gate blocks, it emits the real merged content with `contradiction=1.0` — motors receive this as feedback and refine against it. Example: `examples/pr_review.json`
+
+---
+
+**Triage** — cheap classifier routes easy inputs to a fast path, hard inputs through the full pipeline.
+
+```
+battery → classifier → router → [fast path]
+                               → [slow path]
+```
+
+---
+
 ## UI
 
 A visual circuit builder is included — single HTML file, no build step.
@@ -71,57 +134,24 @@ Drag nodes from the palette, draw wires between ports, inspect and configure via
 
 ---
 
-## How it works
-
-**Signals** are the unit of data flowing between nodes — frozen structs with `content`, `confidence`, `contradiction`, `urgency`, and `relevance`. `Signal.ZERO` means "nothing yet."
-
-**Wire roles** tell the receiving node why it's getting a signal:
-- `context` — normal upstream input (default)
-- `peer` — sibling at the same stage sharing results
-- `feedback` — downstream result looping back upstream (the only legal cycle)
-
-**Node types:** `battery` (static source), `motor` (LLM call), `resistor` (threshold filter), `and_gate` (consensus gate), `router` (branch on rule), `sink` (terminal collector).
-
-**Engine loop:**
-1. Initialize all outputs to `Signal.ZERO`
-2. Inject `user_prompt` into Battery nodes
-3. Run input-less nodes once (bootstrap)
-4. Each iteration: every node reads the previous iteration's snapshot and computes a new output (synchronous Jacobi update — cycles are safe)
-5. `aggregate_delta < epsilon` → converged; `consensus_locked` + Sink has content → early exit
-
----
-
-## Circuit design patterns
-
-**Linear pipeline** — for generation tasks. Converges in 1–2 iterations, no feedback needed.
-```
-battery → drafter → formatter → sink
-```
-Example: `examples/resume_html.json`
-
-**Parallel reviewers + consensus** — for critique tasks. Multiple independent reviewers must agree before output advances.
-```
-battery ──► reviewer_A ──► AND-gate ──► synthesizer ──► sink
-        └──► reviewer_B ──►                  │
-                 ▲                            │
-                 └────── feedback ────────────┘
-```
-Feedback flows from the synthesizer (not the gate — a blocked gate sends `[BLOCKED]`, which is useless). Example: `examples/pr_review.json`
-
-**Triage** — cheap classifier routes easy inputs through a fast path, hard inputs through the full pipeline.
-```
-battery → classifier → router → [fast path]
-                               → [slow path]
-```
-
----
-
 ## Testing
 
 ```powershell
-python -m pytest tests/ -v                         # 118 tests, <1s, no LLM calls
+python -m pytest tests/ -v                         # 135 tests, <1s, no LLM calls
 python -m pytest tests/test_engine_no_motor.py -v  # core thesis: engine works without Motor
 ```
+
+---
+
+## Current limitations
+
+**1-iteration lag on all wires.** Every wire carries the previous iteration's output. A motor with a peer or feedback wire sees `Signal.ZERO` on iteration 1 (sibling had no output yet). Real content arrives starting iteration 2. This is by design — it makes the Jacobi update fully deterministic.
+
+**Feedback loops need higher epsilon.** LLMs produce slightly different text on every call even with identical prompts. With `epsilon: 0.05`, content drift alone (≈0.1 per cache-miss node) can exceed the threshold when multiple motors are active. Use `epsilon: 0.15` for any circuit with feedback wires.
+
+**Motor requires `claude` CLI on PATH.** No direct API integration yet — CirKit shells out to the local `claude -p` subprocess. Authentication uses your existing Claude Code session (`claude auth login`).
+
+**Windows terminal encoding.** Windows PowerShell defaults to CP1252. Avoid non-ASCII characters in Battery `content` strings or Motor system prompts if you see encoding errors. Set `PYTHONIOENCODING=utf-8` if needed.
 
 ---
 
@@ -138,9 +168,9 @@ cirkit/
 ├── confidence.py     # Trailing-JSON parser + heuristic fallback
 └── nodes/            # Battery, Motor, Resistor, AndGate, Router, Sink
 
-tests/                # 118 unit tests
+tests/                # 135 unit tests
 examples/
-├── pr_review.json    # Parallel reviewers + consensus + synthesizer
+├── pr_review.json    # Parallel reviewers + consensus gate + feedback
 └── resume_html.json  # Linear pipeline: drafter → HTML formatter
 ui/
 ├── index.html        # Visual circuit builder (standalone)
@@ -149,3 +179,17 @@ ui/
 ├── views.py          # Django views (StreamingHttpResponse)
 └── urls.py           # Django URL config
 ```
+
+---
+
+## Docs
+
+Full documentation, architecture diagrams, and reference:
+
+**[ssm-08.github.io/cirkit](https://ssm-08.github.io/cirkit)**
+
+- [Quickstart](https://ssm-08.github.io/cirkit/guides/quickstart/) — step-by-step setup
+- [Circuit design patterns](https://ssm-08.github.io/cirkit/guides/circuit-design/) — topologies, pitfalls, tuning
+- [Node config reference](https://ssm-08.github.io/cirkit/reference/node-config/) — all config fields
+- [JSON schema](https://ssm-08.github.io/cirkit/reference/json-schema/) — full circuit format
+- [Architecture](https://ssm-08.github.io/cirkit/reference/architecture/) — engine internals and data flow

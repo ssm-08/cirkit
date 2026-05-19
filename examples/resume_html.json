@@ -9,7 +9,6 @@
   ],
   "wires": [
     { "from": "ctx",     "to": "drafter", "role": "context" },
-    { "from": "ctx",     "to": "coder",   "role": "context" },
     { "from": "drafter", "to": "coder",   "role": "context" },
     { "from": "coder",   "to": "out",     "role": "context" }
   ]

@@ -34,9 +34,8 @@ The CLI streams structured lines to stdout during execution:
 ```
 [iter 0, delta=0.8231]
   [node writer: conf=0.82, contra=0.00, cached=False]
-  [node reviewer: conf=0.78, contra=0.00, cached=False]
+  [node security: conf=0.78, contra=0.00, cached=False]
   [node gate: conf=0.80, contra=0.00, cached=False]
-  [node synthesizer: conf=0.85, contra=0.00, cached=False]
 [iter 1, delta=0.0312]
   [node writer: conf=0.89, contra=0.00, cached=True]
   ...

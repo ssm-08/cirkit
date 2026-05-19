@@ -70,7 +70,7 @@ A step-through mode in the UI canvas: pause after each iteration, inspect per-no
 
 ### Circuit composition
 
-Allow a circuit file to embed another circuit as a single "macro-node." The sub-circuit would expose its Battery inputs and Sink output as external ports. This enables reusing well-tuned sub-circuits (a validated reviewer + gate + synthesizer module, for example) across different top-level circuits without copy-pasting JSON.
+Allow a circuit file to embed another circuit as a single "macro-node." The sub-circuit would expose its Battery inputs and Sink output as external ports. This enables reusing well-tuned sub-circuits (a validated reviewer + gate module, for example) across different top-level circuits without copy-pasting JSON.
 
 ### Multi-sink output
 

@@ -2,7 +2,7 @@
 
 **Signal circuit reasoning engine.** Define a graph of nodes in JSON; signals flow through it until outputs converge. The LLM is one node type — the circuit is the orchestration.
 
-The diagram below is the `examples/pr_review.json` circuit. Two motors independently analyze the same input in parallel. The AND-Gate passes when both are confident. The synthesizer fuses their outputs into one coherent report. Feedback from the synthesizer lets both motors refine in subsequent iterations.
+The diagram below is the `examples/pr_review.json` circuit. Two motors independently analyze the same input in parallel. The AND-Gate passes when both are confident; when blocked, it sends the real merged content back to both motors so they can refine their analysis.
 
 ```mermaid
 flowchart LR
@@ -10,10 +10,9 @@ flowchart LR
     bat -->|context| rb[Motor · security]
     ra -->|context| gate[AND-Gate]
     rb -->|context| gate
-    gate -->|context| syn[Motor · synthesizer]
-    syn -->|context| sink[Sink]
-    syn -.->|feedback| ra
-    syn -.->|feedback| rb
+    gate -->|context| sink[Sink]
+    gate -.->|feedback| ra
+    gate -.->|feedback| rb
 ```
 
 Signals carry `content`, `confidence`, `contradiction`, and other metrics. Each iteration, every node reads the previous round's outputs and produces a new signal. The loop runs until `Δ < ε` — convergence — or `max_iter` is reached.

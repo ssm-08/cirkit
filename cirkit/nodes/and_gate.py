@@ -36,6 +36,8 @@ class AndGate(Node):
         self.threshold = config["threshold"]
         self.early_exit_threshold = config.get("early_exit_threshold", 0.9)
         self.merge_mode = config.get("merge_mode", "concat")
+        if self.merge_mode not in ("concat", "dedupe"):
+            raise ValueError(f"and_gate merge_mode must be 'concat' or 'dedupe', got {self.merge_mode!r}")
 
     def step(self, inputs: dict, state: dict) -> Signal:
         # Collect all non-ZERO signals in role order: context, peer, feedback
