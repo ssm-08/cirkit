@@ -930,7 +930,7 @@ const ND = {
 
 const CIRKIT = '/cirkit';
 const MAX_IT = 8;
-const EPS    = 0.05;
+const EPS    = 0.15;
 
 // ── State ───────────────────────────────────────────────────────
 let nodes=[], wires=[], sel=null, selWire=null, dragType=null, idN=1;
@@ -1759,10 +1759,11 @@ setTimeout(()=>{
   [{from:'battery_1',to:'motor_2',role:'context'},
    {from:'battery_1',to:'motor_3',role:'context'},
    {from:'motor_2',  to:'motor_3',role:'peer'},
-   {from:'motor_2',  to:'and_gate_4',role:'peer'},
-   {from:'motor_3',  to:'and_gate_4',role:'peer'},
+   {from:'motor_2',  to:'and_gate_4',role:'context'},
+   {from:'motor_3',  to:'and_gate_4',role:'context'},
    {from:'and_gate_4',to:'sink_5',role:'context'},
    {from:'and_gate_4',to:'motor_2',role:'feedback'},
+   {from:'and_gate_4',to:'motor_3',role:'feedback'},
   ].forEach(w=>wires.push(w));
   drawWires(); $('ehint').style.display='none';
 },100);
