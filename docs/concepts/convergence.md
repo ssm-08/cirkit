@@ -7,13 +7,13 @@ CirKit terminates when the circuit's aggregate delta falls below `epsilon` or wh
 For each node, the delta between iteration N−1 and N is:
 
 ```
-delta(prev, curr) = 0.6 × metric_distance + 0.4 × content_change
+delta(prev, curr) = 0.9 × metric_distance + 0.1 × content_change
 ```
 
 - `metric_distance` = Euclidean norm of `(Δconf, Δcontra, Δurgency, Δrelevance)` / 2, clamped to `[0, 1]`
 - `content_change` = 1 if `SHA1(content)` changed, 0 if identical
 
-The 0.6/0.4 weighting treats content change as less decisive than metric drift — a node that produces the same text but with higher confidence still counts as progressing.
+The 0.9/0.1 weighting reflects a key empirical finding: LLMs produce slightly different text on every call even with identical prompts. A 0.4 content weight made feedback-loop circuits unconvergeable — delta was permanently ≥ 0.4 regardless of metric stability. Metric convergence is the real signal; content drift is noise. The 0.1 weight catches dramatic answer flips (complete content change with stable metrics) without blocking convergence from minor wording variation.
 
 ## Aggregate delta
 
@@ -36,9 +36,10 @@ Since only active nodes contribute to the mean, epsilon directly reflects what t
 
 | Situation | Recommended epsilon |
 |-----------|---------------------|
-| Linear pipeline, converges fast | 0.05–0.1 |
-| Parallel review + gate | 0.03–0.05 |
-| Dense feedback loop with many active motors | 0.01–0.03 |
+| Linear pipeline (no feedback) | 0.05–0.1 |
+| Parallel motors + gate, no feedback | 0.05 |
+| Feedback loop between motors | 0.15 |
+| Feedback loop + gate→motor feedback | 0.15 |
 
 If the circuit exits too early (output quality low): lower epsilon.  
 If the circuit runs too many iterations unnecessarily: raise epsilon.
@@ -49,7 +50,7 @@ If the circuit runs too many iterations unnecessarily: raise epsilon.
 
 - AND-Gate threshold too high (motors can't converge to passing confidence)
 - Motor system prompt that rates confidence on outcome, not completeness
-- Feedback wire from a blocked gate (sends `[BLOCKED]` which has zero useful content)
+- Motor confidence that never reaches the gate threshold (tune threshold down or fix system prompt)
 
 If the circuit hits `max_iter` regularly, fix the root cause rather than raising `max_iter`.
 

@@ -128,7 +128,7 @@ def test_c1_zero_in_inputs_does_not_cause_cache_miss():
     real_sig = Signal(content="hello", confidence=0.7)
     call_count = [0]
 
-    def fake_llm(prompt, *, session_id=None, model=None, timeout=60):
+    def fake_llm(prompt, *, session_id=None, resume=False, model=None, timeout=60):
         call_count[0] += 1
         return LLMResult(content='result\n{"confidence": 0.8}')
 
@@ -145,7 +145,7 @@ def test_i2_motor_cache_bounded_at_64():
     """I2: Motor cache must never exceed 64 entries."""
     call_count = [0]
 
-    def fake_llm(prompt, *, session_id=None, model=None, timeout=60):
+    def fake_llm(prompt, *, session_id=None, resume=False, model=None, timeout=60):
         call_count[0] += 1
         return LLMResult(content=f'result {call_count[0]}\n{{"confidence": 0.8}}')
 
@@ -164,7 +164,7 @@ def test_i2_lru_eviction_oldest_entry():
     """I2: When cache is full, oldest (LRU) entry is evicted."""
     call_count = [0]
 
-    def fake_llm(prompt, *, session_id=None, model=None, timeout=60):
+    def fake_llm(prompt, *, session_id=None, resume=False, model=None, timeout=60):
         call_count[0] += 1
         return LLMResult(content=f'out {call_count[0]}\n{{"confidence": 0.8}}')
 

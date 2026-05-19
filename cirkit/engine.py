@@ -80,9 +80,10 @@ def run(circuit: Circuit, user_prompt: str, epsilon: float = None, max_iter: int
         if on_iter is not None:
             node_info = {
                 nid: {
-                    "conf":   new_outputs[nid].confidence,
-                    "contra": new_outputs[nid].contradiction,
-                    "cached": new_outputs[nid] is prev_outputs[nid],
+                    "conf":    new_outputs[nid].confidence,
+                    "contra":  new_outputs[nid].contradiction,
+                    "cached":  new_outputs[nid] is prev_outputs[nid],
+                    "content": new_outputs[nid].content,
                 }
                 for nid in circuit.nodes
             }

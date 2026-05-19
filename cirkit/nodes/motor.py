@@ -4,6 +4,8 @@ from cirkit.nodes.base import Node
 from cirkit.signal import Signal
 from cirkit import llm, confidence
 
+_DELTA_LABELS = {"context": "CONTEXT", "peer": "PEER OUTPUTS", "feedback": "FEEDBACK"}
+
 MOTOR_PREFIX = """You are a node in a reasoning circuit called multiple times.
 RULES:
 1. SINGLE PASS. No mid-response revisions. Commit and move on.
@@ -73,7 +75,7 @@ class Motor(Node):
             return None
         for section in ("context", "peer", "feedback"):
             if section in changed and curr[section]:
-                label = {"context": "CONTEXT", "peer": "PEER OUTPUTS", "feedback": "FEEDBACK"}[section]
+                label = _DELTA_LABELS[section]
                 lines.append(f"[UPDATED {label}]")
                 lines.append(curr[section])
         lines.append(
@@ -92,19 +94,24 @@ class Motor(Node):
         session_id: str | None = state.get("session_id")
         prior_sections: dict | None = state.get("last_sections")
 
+        is_resume = prior_sections is not None and bool(session_id)
+        used_delta = False
         prompt = full_prompt
-        if prior_sections is not None and session_id:
+        if is_resume:
             delta = self._build_delta_prompt(curr_sections, prior_sections)
             if delta is not None:
                 prompt = delta
+                used_delta = True
 
         try:
-            result = llm.call_claude(prompt, session_id=session_id, model=self.model)
+            result = llm.call_claude(prompt, session_id=session_id, resume=is_resume, model=self.model)
         except llm.LLMError as e:
-            if prior_sections is not None and prompt != full_prompt:
+            if used_delta:
                 # Fail-soft: retry with full prompt if delta send failed
+                print(f"[Motor LLMError delta] {e} — retrying with full prompt", file=sys.stderr)
                 try:
-                    result = llm.call_claude(full_prompt, session_id=session_id, model=self.model)
+                    result = llm.call_claude(full_prompt, session_id=session_id, resume=is_resume, model=self.model)
+                    used_delta = False
                 except llm.LLMError as e2:
                     print(f"[Motor LLMError] {e2}", file=sys.stderr)
                     return Signal.ZERO
@@ -118,7 +125,7 @@ class Motor(Node):
             "tokens_in": result.tokens_in,
             "tokens_out": result.tokens_out,
             "cost_usd": result.cost_usd,
-            "delta": prompt != full_prompt,
+            "delta": used_delta,
         }
         state.setdefault("token_usage", []).append(usage_entry)
 

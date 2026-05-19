@@ -66,7 +66,7 @@ flowchart LR
     gate         -->|context| sink[Sink]
 ```
 
-The AND-Gate passes only when ALL non-ZERO inputs exceed the `threshold`. When blocked, it emits `contradiction=1.0`, which forces upstream motors to bypass their cache and re-run on the next iteration.
+The AND-Gate passes only when ALL non-ZERO inputs exceed the `threshold`. When blocked, it emits `contradiction=1.0` with the **real merged content** of all inputs — not a placeholder string. This forces upstream motors to bypass their cache (R2) and re-run with the actual combined output as context, so they can identify gaps and refine.
 
 Use `merge_mode: concat` — the gate concatenates passing outputs and sends them to Sink. No synthesizer needed.
 
@@ -100,8 +100,8 @@ Feedback wires carry the synthesizer's output back to the motors on the next ite
 !!! warning "merge_mode: synthesize does not call the LLM"
     `synthesize` mode only concatenates inputs and sets a flag. The downstream synthesizer **Motor** is what actually calls the LLM to produce the fused result. Without the Motor, the flag goes nowhere.
 
-!!! warning "Gate threshold must be low enough to pass on the first real iteration"
-    If the gate blocks every iteration, it emits `[BLOCKED: insufficient confidence]` as content. The synthesizer receives this useless input, produces garbage, and motors get garbage feedback. Lower the threshold to 0.45–0.55 so the gate passes when motors produce normally-confident output.
+!!! warning "Gate threshold must be low enough to pass on real motor output"
+    If the gate blocks every iteration, motors receive the merged (but low-confidence) combined output as feedback — they can refine against it, but convergence depends on confidence rising to meet the threshold. Keep threshold at 0.45–0.55 so the gate passes when motors produce normally-confident output.
 
 **Iteration walkthrough for this pattern:**
 
@@ -156,7 +156,7 @@ The classifier scores the input and emits a confidence signal. The Router inspec
 
 **Symptom**: circuit hits `max_iter` every run. Delta never converges. Gate always blocked.
 
-**Cause**: Motor system prompt says "output LOW confidence if issues found." Gate blocks. Gate sends `[BLOCKED: insufficient confidence]` to the synthesizer. Synthesizer produces garbage. Motors get garbage feedback. Repeat.
+**Cause**: Motor system prompt says "output LOW confidence if issues found." Gate blocks every iteration. Motors receive the merged (blocked) output as feedback but can't improve because their confidence instruction is inverted.
 
 **Fix**: confidence must reflect *completeness of analysis*, not *absence of issues*. A reviewer who finds five bugs but analyzed every file thoroughly should output high confidence.
 
@@ -175,13 +175,13 @@ RIGHT: "Output confidence: 0.9 if you reviewed all aspects of the change thoroug
 
 Note: in Pattern 2 (parallel independent reviewers), this wire is intentionally absent — each motor analyzes the same source independently. Only add the peer wire when you explicitly want one motor to read and respond to another's output.
 
-### Feedback from a blocked gate
+### Feedback loop never converges (epsilon too low)
 
-**Symptom**: motors oscillate; feedback content is `[BLOCKED: insufficient confidence]`.
+**Symptom**: motors oscillate at stable confidence but delta stays above epsilon. Circuit hits `max_iter`.
 
-**Cause**: feedback wire points to the AND-Gate directly rather than a downstream synthesizer. A blocked gate emits `[BLOCKED]` as content — not a real analysis.
+**Cause**: LLMs produce slightly different text on every call even with identical prompts. With the default `epsilon: 0.05`, content drift alone (0.1 per cache-miss node) can exceed the threshold when multiple motors are active.
 
-**Fix**: wire feedback from the synthesizer. If you don't need LLM-quality synthesis, use Pattern 2 (gate directly to sink) and skip the feedback loop entirely.
+**Fix**: raise epsilon to `0.15` for circuits with feedback loops. Metric stability (confidence, contradiction) is the real convergence signal — content drift is noise.
 
 ### AND-Gate threshold above 0.6
 

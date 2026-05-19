@@ -2,6 +2,17 @@
 
 Known gaps and directions for future development, roughly ordered by scope.
 
+## Current core limitations
+
+| Limitation | Impact | Notes |
+|-----------|--------|-------|
+| **Motors run sequentially** | O(motors × llm_latency) per iteration | Sibling motors are fully independent (Jacobi model) — could run in parallel with `asyncio`. Highest-impact unimplemented improvement. |
+| **Delta prompting via CLI** | Hacky session continuity | `--resume` works but is unreliable. Phase 2 (direct API + `cache_control: ephemeral`) is the right path. |
+| **No semantic cache** | Identical-meaning prompts miss cache | Cache key is exact content hash. Two prompts asking the same thing differently always miss. |
+| **urgency/relevance metrics unused** | Dead weight in every Signal | Set in Signal, propagated through delta formula, but no node routes or acts on them. |
+| **LLM non-determinism** | Feedback loops need epsilon ≥ 0.15 | Content changes every call; metric stability is the real convergence signal. |
+| **No cross-run cache** | Cold start every run | Motor LRU cache is per-run only. Same circuit + same battery = full re-execution. |
+
 ---
 
 ## Near-term
@@ -12,6 +23,14 @@ The UI canvas already shows Or-Gate and XOR-Gate as greyed-out placeholders. Bot
 
 - **Or-Gate**: passes when *any* input exceeds the threshold, vs AND-Gate requiring all. Useful for "first responder" patterns where the fastest good-enough answer wins, or where any one reviewer approving is sufficient.
 - **XOR-Gate**: passes only when exactly one input exceeds threshold. Useful for mutually exclusive branches — emit whichever specialist produced the confident answer, suppress the rest.
+
+### Semantic cache
+
+Cache key is currently exact content hash. Two prompts with identical meaning but different wording always miss. An embedding-based similarity cache (cosine threshold ~0.97) would catch these. High ROI for circuits that run repeatedly on similar inputs.
+
+### Cross-run cache persistence
+
+Motor LRU cache is per-run only — thrown away on exit. Persisting it to disk (keyed by prompt hash) would warm-start repeated runs of the same circuit on the same input.
 
 ### Per-motor LLM provider config
 

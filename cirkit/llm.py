@@ -19,6 +19,7 @@ def call_claude(
     prompt: str,
     *,
     session_id: str | None = None,
+    resume: bool = False,
     model: str | None = None,
     timeout: int = 60,
 ) -> LLMResult:
@@ -26,11 +27,16 @@ def call_claude(
 
     Passes prompt via stdin (not argv) to avoid PowerShell quoting issues.
     Uses --output-format json for token/cost telemetry.
+    session_id + resume=False → --session-id (creates new session with that UUID).
+    session_id + resume=True  → --resume (continues existing session).
     Raises LLMError on non-zero exit, timeout, or missing claude binary.
     """
     cmd = ["claude", "-p", "--output-format", "json"]
     if session_id:
-        cmd += ["--session-id", session_id]
+        if resume:
+            cmd += ["--resume", session_id]
+        else:
+            cmd += ["--session-id", session_id]
     if model:
         cmd += ["--model", model]
     try:

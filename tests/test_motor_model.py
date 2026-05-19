@@ -2,7 +2,6 @@
 import pytest
 from unittest.mock import patch
 from cirkit.nodes.motor import Motor
-from cirkit.signal import Signal
 from cirkit import llm
 
 
@@ -10,23 +9,19 @@ def _llm_result():
     return llm.LLMResult(content='ok. {"confidence": 0.8}', tokens_in=10, tokens_out=5, cost_usd=0.001)
 
 
-def _make_signal(content):
-    return Signal(content=content, confidence=0.8)
-
-
-def test_model_flag_passed_when_configured():
+def test_model_flag_passed_when_configured(make_signal):
     motor = Motor({"system": "test", "model": "haiku"})
     state = {}
-    inputs = {"context": [_make_signal("ctx")]}
+    inputs = {"context": [make_signal("ctx")]}
     with patch("cirkit.llm.call_claude", return_value=_llm_result()) as mock:
         motor._call_llm(inputs, state)
     assert mock.call_args[1]["model"] == "haiku"
 
 
-def test_model_flag_omitted_when_not_configured():
+def test_model_flag_omitted_when_not_configured(make_signal):
     motor = Motor({"system": "test"})
     state = {}
-    inputs = {"context": [_make_signal("ctx")]}
+    inputs = {"context": [make_signal("ctx")]}
     with patch("cirkit.llm.call_claude", return_value=_llm_result()) as mock:
         motor._call_llm(inputs, state)
     assert mock.call_args[1]["model"] is None

@@ -3,16 +3,21 @@ from cirkit.signal import Signal
 
 
 def delta(prev: Signal, curr: Signal) -> float:
-    """0.6*metric_dist + 0.4*content_change. See plan convergence math section.
+    """0.9*metric_dist + 0.1*content_change.
 
     metric_dist   = euclidean(prev_metrics, curr_metrics) / 2.0  (clamped to [0,1])
     content_change = 0.0 if hash(prev) == hash(curr) else 1.0   (binary)
+
+    Content weight is intentionally low (0.1): LLM non-determinism causes minor
+    content drift every iteration even when semantics are stable. Metric convergence
+    is the primary convergence signal; content_change catches dramatic answer flips
+    when metrics are already at floor/ceiling.
     """
     v1 = prev.metrics_vector()
     v2 = curr.metrics_vector()
     metric_dist = min(1.0, math.sqrt(sum((a - b) ** 2 for a, b in zip(v1, v2))) / 2.0)
     content_change = 0.0 if prev.content_hash() == curr.content_hash() else 1.0
-    return 0.6 * metric_dist + 0.4 * content_change
+    return 0.9 * metric_dist + 0.1 * content_change
 
 
 def aggregate_delta(prev_outputs: dict, curr_outputs: dict) -> float:

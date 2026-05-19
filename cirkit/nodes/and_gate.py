@@ -1,8 +1,8 @@
 from cirkit.nodes.base import Node
 from cirkit.signal import Signal
 
-_BLOCKED = Signal(
-    content="[BLOCKED: insufficient confidence]",
+_NO_INPUTS = Signal(
+    content="",
     confidence=0.0,
     contradiction=1.0,
     urgency=0.0,
@@ -25,9 +25,9 @@ class AndGate(Node):
             set flags['consensus_locked']=True
 
     If blocked:
-      Return Signal(content='[BLOCKED: insufficient confidence]',
-                    confidence=0.0, contradiction=1.0, urgency=0.0, relevance=0.0)
+      Merge content as normal, but return with confidence=0.0, contradiction=1.0.
       contradiction=1.0 triggers R2 cache invalidation in upstream Motors.
+      Real merged content in signal lets motors refine against actual output, not "[BLOCKED]".
 
     If all inputs are Signal.ZERO: treat as blocked.
     """
@@ -50,15 +50,15 @@ class AndGate(Node):
                 ordered.extend(s for s in inputs[role] if s is not Signal.ZERO)
 
         if not ordered:
-            return _BLOCKED
-
-        if any(s.confidence < self.threshold for s in ordered):
-            return _BLOCKED
+            return _NO_INPUTS
 
         if self.merge_mode == "dedupe":
             merged_content = _dedupe_lines(ordered)
         else:
             merged_content = "\n---\n".join(s.content for s in ordered)
+
+        if any(s.confidence < self.threshold for s in ordered):
+            return Signal(content=merged_content, confidence=0.0, contradiction=1.0)
 
         flags: dict = {}
 

@@ -18,35 +18,31 @@ def _llm_result(tokens_in=100, tokens_out=50, cost=0.002):
     )
 
 
-def _make_signal(content):
-    return Signal(content=content, confidence=0.8)
-
-
-def test_session_id_passed_to_llm():
+def test_session_id_passed_to_llm(make_signal):
     motor = Motor({"system": "test"})
     state = {"session_id": "aabbccdd-1234-5678-abcd-000000000000"}
-    inputs = {"context": [_make_signal("ctx")]}
+    inputs = {"context": [make_signal("ctx")]}
     with patch("cirkit.llm.call_claude", return_value=_llm_result()) as mock:
         motor._call_llm(inputs, state)
     assert mock.call_args[1]["session_id"] == "aabbccdd-1234-5678-abcd-000000000000"
 
 
-def test_no_session_id_still_works():
+def test_no_session_id_still_works(make_signal):
     motor = Motor({"system": "test"})
     state = {}
-    inputs = {"context": [_make_signal("ctx")]}
+    inputs = {"context": [make_signal("ctx")]}
     with patch("cirkit.llm.call_claude", return_value=_llm_result()) as mock:
         sig = motor._call_llm(inputs, state)
     assert mock.call_args[1]["session_id"] is None
     assert sig is not Signal.ZERO
 
 
-def test_token_usage_and_delta_flag_across_two_calls():
+def test_token_usage_and_delta_flag_across_two_calls(make_signal):
     """Combines: token accumulation per call + delta flag on second call."""
     motor = Motor({"system": "test"})
     state = {"session_id": "test-uuid", "token_usage": []}
-    inputs_1 = {"context": [_make_signal("first")]}
-    inputs_2 = {"context": [_make_signal("first")], "feedback": [_make_signal("refine")]}
+    inputs_1 = {"context": [make_signal("first")]}
+    inputs_2 = {"context": [make_signal("first")], "feedback": [make_signal("refine")]}
     with patch("cirkit.llm.call_claude", return_value=_llm_result(100, 50, 0.002)):
         motor._call_llm(inputs_1, state)
     with patch("cirkit.llm.call_claude", return_value=_llm_result(20, 30, 0.001)):
@@ -83,7 +79,7 @@ def test_engine_assigns_unique_session_ids_per_motor(tmp_path):
 
     seen_sessions = []
 
-    def capture_llm(prompt, *, session_id=None, model=None, timeout=60):
+    def capture_llm(prompt, *, session_id=None, resume=False, model=None, timeout=60):
         if session_id:
             seen_sessions.append(session_id)
         return llm.LLMResult(content='ok. {"confidence": 0.9}')

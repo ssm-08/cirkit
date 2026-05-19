@@ -86,7 +86,7 @@ Use a Resistor to raise the bar for one specific input above what the downstream
 - `dedupe` — line-level case-insensitive deduplication, preserve first-occurrence order, no LLM
 - `synthesize` — same as `concat`, plus sets `flags["needs_synthesis"] = True`. This flag does **not** call the LLM — it signals a downstream synthesizer Motor to do the actual LLM fusion. Without a Motor downstream, this flag goes nowhere.
 
-When blocked, the gate emits `contradiction = 1.0` (not `Signal.ZERO`). This triggers the R2 cache bypass in upstream Motors, forcing them to re-run with the contradiction as implicit feedback.
+When blocked, the gate merges inputs first (same as passing), then emits the merged content with `contradiction = 1.0, confidence = 0.0`. This means upstream Motors receive the actual combined output as feedback — not a useless placeholder. The `contradiction = 1.0` triggers the R2 cache bypass, forcing motors to re-run and refine against the real merged content.
 
 **Threshold sweet spot**: 0.45–0.55 for most circuits. Above 0.6 risks blocking oscillation.
 

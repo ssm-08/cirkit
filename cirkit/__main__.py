@@ -2,6 +2,9 @@
 import sys
 import cirkit  # triggers all registrations
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 
 def main():
     if len(sys.argv) < 4 or sys.argv[1] != "run":
@@ -20,8 +23,12 @@ def main():
     def _on_iter(it, delta, node_info):
         print(f"[iter {it}, delta={delta:.4f}]", flush=True)
         for nid, info in node_info.items():
-            k = 1 if info["cached"] else 0
+            cached = info["cached"]
+            k = 1 if cached else 0
             print(f"[node {nid} c={info['conf']:.4f} x={info['contra']:.4f} k={k}]", flush=True)
+            if not cached and info["content"]:
+                snippet = info["content"][:160].replace("\n", " ")
+                print(f"  >> {snippet}", flush=True)
 
     result = cirkit.run(circuit, user_prompt, on_iter=_on_iter)
 
