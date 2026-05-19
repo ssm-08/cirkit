@@ -141,6 +141,11 @@ def parse_float_after(s: str, marker: str) -> float | None:
 
 def parse_cirkit_line(line: str) -> dict | None:
     """Parse a cirkit CLI stdout line -> event dict, or None if it's output content."""
+    if line.startswith("[cost "):
+        tokens_in = parse_int_after(line, "tokens_in=")
+        tokens_out = parse_int_after(line, "tokens_out=")
+        cost_usd = parse_float_after(line, "cost_usd=$")
+        return {"type": "cost", "tokens_in": tokens_in, "tokens_out": tokens_out, "cost_usd": cost_usd}
     if line.startswith("[converged") or line.startswith("[MAX_ITER"):
         return {
             "type": "done",

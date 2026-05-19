@@ -1,8 +1,10 @@
+import uuid
 from cirkit.graph import Circuit
 from cirkit.state import RunState, RunResult
 from cirkit.signal import Signal
 from cirkit.convergence import aggregate_delta
 from cirkit.nodes.battery import Battery
+from cirkit.nodes.motor import Motor
 
 
 def run(circuit: Circuit, user_prompt: str, epsilon: float = None, max_iter: int = None, on_iter=None) -> RunResult:
@@ -28,10 +30,13 @@ def run(circuit: Circuit, user_prompt: str, epsilon: float = None, max_iter: int
     state.outputs = {nid: Signal.ZERO for nid in circuit.nodes}
     state.node_state = {nid: {} for nid in circuit.nodes}
 
-    # B. Inject user_prompt into Battery node states before bootstrap
+    # B. Inject user_prompt into Battery node states; assign session_id per Motor
     for nid, node in circuit.nodes.items():
         if isinstance(node, Battery):
             state.node_state[nid]["user_prompt"] = user_prompt
+        elif isinstance(node, Motor):
+            state.node_state[nid]["session_id"] = str(uuid.uuid4())
+            state.node_state[nid]["token_usage"] = []
 
     # C. Bootstrap: seed input-less nodes once before iter 0
     for nid, node in circuit.nodes.items():
@@ -91,10 +96,26 @@ def run(circuit: Circuit, user_prompt: str, epsilon: float = None, max_iter: int
 
     final = state.node_state[circuit.sink_id].get("last_input", Signal.ZERO)
 
+    per_motor: dict = {}
+    total_in = total_out = 0
+    total_cost = 0.0
+    for nid, node in circuit.nodes.items():
+        if isinstance(node, Motor):
+            usage = state.node_state[nid].get("token_usage", [])
+            per_motor[nid] = usage
+            for entry in usage:
+                total_in += entry.get("tokens_in", 0)
+                total_out += entry.get("tokens_out", 0)
+                total_cost += entry.get("cost_usd", 0.0)
+
     return RunResult(
         output=final,
         iterations=state.iteration + 1,
         converged=converged,
         delta_history=state.delta_history,
         all_outputs=state.outputs,
+        total_tokens_in=total_in,
+        total_tokens_out=total_out,
+        total_cost_usd=total_cost,
+        per_motor_usage=per_motor,
     )

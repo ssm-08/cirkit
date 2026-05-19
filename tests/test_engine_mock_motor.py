@@ -3,8 +3,14 @@ from unittest.mock import patch
 from cirkit.graph import load_circuit
 from cirkit.engine import run
 from cirkit.confidence import parse_confidence
+from cirkit.llm import LLMResult
 
-MOCK_RESPONSE = "This is a mock code review.\n{\"confidence\":0.8}"
+MOCK_RESPONSE = LLMResult(
+    content="This is a mock code review.\n{\"confidence\":0.8}",
+    tokens_in=100,
+    tokens_out=50,
+    cost_usd=0.001,
+)
 
 
 def test_mock_motor_converges():

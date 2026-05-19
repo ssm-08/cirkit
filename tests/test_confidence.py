@@ -70,13 +70,10 @@ def test_empty_input_returns_low_confidence():
     assert parse_confidence("   ") == ("", 0.1)
 
 
-def test_explicit_confidence_clamped_to_1():
-    raw = 'ok\n{"confidence": 1.5}'
+@pytest.mark.parametrize("raw,expected", [
+    ('ok\n{"confidence": 1.5}',  1.0),
+    ('ok\n{"confidence": -0.5}', 0.0),
+])
+def test_explicit_confidence_clamped(raw, expected):
     _, conf = parse_confidence(raw)
-    assert conf == pytest.approx(1.0)
-
-
-def test_explicit_confidence_clamped_to_0():
-    raw = 'ok\n{"confidence": -0.5}'
-    _, conf = parse_confidence(raw)
-    assert conf == pytest.approx(0.0)
+    assert conf == pytest.approx(expected)

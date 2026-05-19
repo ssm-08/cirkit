@@ -7,12 +7,11 @@ from cirkit.convergence import delta, aggregate_delta
 SATURATED = Signal(content="x", confidence=1.0, contradiction=1.0, urgency=1.0, relevance=1.0)
 
 
-def test_delta_same_signal_zero():
-    assert delta(Signal.ZERO, Signal.ZERO) == 0.0
-
-
-def test_delta_same_non_zero_signal():
-    s = Signal(content="hello", confidence=0.7, contradiction=0.1, urgency=0.3, relevance=0.5)
+@pytest.mark.parametrize("s", [
+    Signal.ZERO,
+    Signal(content="hello", confidence=0.7, contradiction=0.1, urgency=0.3, relevance=0.5),
+])
+def test_delta_same_signal_is_zero(s):
     assert delta(s, s) == 0.0
 
 

@@ -52,6 +52,7 @@ The CLI streams structured lines to stdout during execution:
 | `[node ID: conf=X, contra=Y, cached=Z]` | Per-node status for this iteration |
 | `[converged after N iter, delta=X]` | Circuit converged before max_iter |
 | `[MAX_ITER reached after N iter, delta=X]` | max_iter hit without convergence |
+| `[cost tokens_in=N tokens_out=M cost_usd=$X.XX]` | Token usage and cost summary across all Motor calls |
 | `=== OUTPUT ===` | Separator before final output text |
 
 The `ui/server.py` and `ui/views.py` parse this output via `circuit_utils.parse_cirkit_line()` and convert it to ndjson events for the browser.

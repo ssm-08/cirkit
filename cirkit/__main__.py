@@ -31,6 +31,11 @@ def main():
     else:
         print(f"[MAX_ITER (non-convergent) after {result.iterations} iter, final delta={final_delta:.4f}]")
 
+    print(
+        f"[cost tokens_in={result.total_tokens_in} tokens_out={result.total_tokens_out}"
+        f" cost_usd=${result.total_cost_usd:.4f}]"
+    )
+
     print(result.output.content)
 
 

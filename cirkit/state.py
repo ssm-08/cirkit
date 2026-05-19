@@ -18,3 +18,7 @@ class RunResult:
     converged: bool
     delta_history: list
     all_outputs: dict  # node_id -> Signal (final iteration snapshot)
+    total_tokens_in: int = 0
+    total_tokens_out: int = 0
+    total_cost_usd: float = 0.0
+    per_motor_usage: dict = field(default_factory=dict)  # node_id -> list[dict]

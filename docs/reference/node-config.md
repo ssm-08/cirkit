@@ -29,7 +29,8 @@ Per-node `config` field reference for all built-in node types.
   "id": "writer",
   "type": "motor",
   "config": {
-    "system": "You are a technical writer. End with {\"confidence\": 0.9}."
+    "system": "You are a technical writer. End with {\"confidence\": 0.9}.",
+    "model": "haiku"
   }
 }
 ```
@@ -37,6 +38,7 @@ Per-node `config` field reference for all built-in node types.
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `system` | string | **yes** | — | LLM system prompt; should include confidence instruction |
+| `model` | string | no | CLI default | Model alias or full ID passed to `claude --model`. Use `"haiku"` for cheap low-stakes nodes; omit for Sonnet/Opus default |
 
 **Confidence instruction**: Motor expects the LLM to output `{"confidence": X}` (0.0–1.0) as the last non-empty line. If absent, confidence is estimated via:
 

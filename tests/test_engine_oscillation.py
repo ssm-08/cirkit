@@ -27,91 +27,40 @@ class Oscillator(Node):
         return Signal(content=content, confidence=0.5)
 
     def _maybe_cached_step(self, inputs: dict, state: dict) -> Signal:
-        # Bypass caching so oscillation persists despite stable inputs
         return self.step(inputs, state)
 
 
-def _write_tmp(data):
-    f = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
-    json.dump(data, f)
-    f.close()
-    return f.name
-
-
-def test_oscillation_runs_to_max_iter():
+@pytest.fixture(autouse=True)
+def register_oscillator():
     NODE_REGISTRY["oscillator"] = Oscillator
+    yield
+    NODE_REGISTRY.pop("oscillator", None)
+
+
+@pytest.fixture
+def oscillator_circuit(tmp_path):
     data = {
         "config": {"epsilon": 0.01, "max_iter": 5},
         "sink": "out",
         "nodes": [
-            {"id": "ctx",  "type": "battery",    "config": {"content": "seed", "accumulate": False}},
-            {"id": "osc",  "type": "oscillator",  "config": {}},
-            {"id": "out",  "type": "sink",        "config": {}}
+            {"id": "ctx", "type": "battery",    "config": {"content": "seed", "accumulate": False}},
+            {"id": "osc", "type": "oscillator",  "config": {}},
+            {"id": "out", "type": "sink",        "config": {}}
         ],
         "wires": [
             {"from": "ctx", "to": "osc", "role": "context"},
             {"from": "osc", "to": "out", "role": "context"}
         ]
     }
-    path = _write_tmp(data)
-    try:
-        circuit = load_circuit(path)
-        result = run(circuit, "test oscillation")
-        assert result.converged is False
-        assert result.iterations == 5
-    finally:
-        os.unlink(path)
-        del NODE_REGISTRY["oscillator"]
+    path = tmp_path / "osc.json"
+    path.write_text(json.dumps(data))
+    return load_circuit(str(path))
 
 
-def test_oscillation_no_exception():
-    NODE_REGISTRY["oscillator"] = Oscillator
-    data = {
-        "config": {"epsilon": 0.01, "max_iter": 5},
-        "sink": "out",
-        "nodes": [
-            {"id": "ctx", "type": "battery",   "config": {"content": "seed", "accumulate": False}},
-            {"id": "osc", "type": "oscillator", "config": {}},
-            {"id": "out", "type": "sink",       "config": {}}
-        ],
-        "wires": [
-            {"from": "ctx", "to": "osc", "role": "context"},
-            {"from": "osc", "to": "out", "role": "context"}
-        ]
-    }
-    path = _write_tmp(data)
-    try:
-        circuit = load_circuit(path)
-        result = run(circuit, "no error expected")
-        # Must not raise; delta_history should have entries
-        assert len(result.delta_history) == 5
-    finally:
-        os.unlink(path)
-        del NODE_REGISTRY["oscillator"]
-
-
-def test_oscillation_final_delta_above_epsilon():
-    NODE_REGISTRY["oscillator"] = Oscillator
-    data = {
-        "config": {"epsilon": 0.01, "max_iter": 5},
-        "sink": "out",
-        "nodes": [
-            {"id": "ctx", "type": "battery",   "config": {"content": "seed", "accumulate": False}},
-            {"id": "osc", "type": "oscillator", "config": {}},
-            {"id": "out", "type": "sink",       "config": {}}
-        ],
-        "wires": [
-            {"from": "ctx", "to": "osc", "role": "context"},
-            {"from": "osc", "to": "out", "role": "context"}
-        ]
-    }
-    path = _write_tmp(data)
-    try:
-        circuit = load_circuit(path)
-        result = run(circuit, "delta test")
-        epsilon = circuit.config.get("epsilon", 0.01)
-        # At least one delta must be above epsilon for non-convergence
-        assert any(d >= epsilon for d in result.delta_history)
-    finally:
-        os.unlink(path)
-        del NODE_REGISTRY["oscillator"]
+def test_oscillation_does_not_converge(oscillator_circuit):
+    result = run(oscillator_circuit, "test")
+    assert result.converged is False
+    assert result.iterations == 5
+    assert len(result.delta_history) == 5
+    epsilon = oscillator_circuit.config.get("epsilon", 0.01)
+    assert any(d >= epsilon for d in result.delta_history)

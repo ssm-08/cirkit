@@ -10,7 +10,7 @@ Signal circuit reasoning engine. Graph of stateful nodes propagate typed Signals
 ## Project layout
 - `cirkit/` — core engine (signal, convergence, graph, engine, llm, confidence)
 - `cirkit/nodes/` — Battery, Sink, Resistor, AndGate, Router, Motor
-- `tests/` — 124 unit tests, all no-LLM except mock motor tests
+- `tests/` — 135 unit tests, all no-LLM except mock motor tests
 - `examples/pr_review.json` — canonical demo circuit (writer+security→gate→synthesizer; feedback from synthesizer back to motors)
 - `examples/resume_html.json` — linear pipeline demo (drafter → HTML coder, no feedback loop)
 - `ui/index.html` — standalone circuit builder UI (single file, no build step)
@@ -24,7 +24,7 @@ Signal circuit reasoning engine. Graph of stateful nodes propagate typed Signals
 - `pip install -e .` — bare install, no test/docs extras; sufficient for running circuits
 
 ## Commands
-- `python -m pytest tests/ -v` — run all 124 tests (fast, <1s, no LLM calls)
+- `python -m pytest tests/ -v` — run all 135 tests (fast, <1s, no LLM calls)
 - `python -m pytest tests/test_engine_no_motor.py -v` — core thesis proof
 - `python -m cirkit run examples\pr_review.json "<prompt>"` — end-to-end (needs claude CLI)
 - `python ui/server.py` — dev UI at http://localhost:8080/ (no Django needed)
@@ -129,6 +129,16 @@ When user says "clear", "ready to clear", or similar — before clearing:
 - `.github/workflows/docs.yml` — triggers on push to master when `docs/**` or `mkdocs.yml` changes + `workflow_dispatch` for manual trigger; deploys via `actions/deploy-pages` (requires Pages source = "GitHub Actions" in repo settings, NOT "Deploy from branch")
 - Python 3.14 has no GitHub Actions runner — CI matrix stops at 3.13
 - **CI pyproject.toml invariants**: build-backend must be `setuptools.build_meta` (not `setuptools.backends.legacy` — fails on Python 3.11 CI); `[tool.setuptools.packages.find] include = ["cirkit*"]` required to exclude `ui/` from package discovery; pytest lives in `[project.optional-dependencies] test`
+
+## Motor efficiency (Phase 1 — sessions + delta)
+- **`llm.call_claude` returns `LLMResult` dataclass** (not `str`): `content`, `tokens_in`, `tokens_out`, `cost_usd`. Any test mock patching `cirkit.llm.call_claude` must return `LLMResult`, not a plain string.
+- **`fake_llm` signature in tests**: `def fake_llm(prompt, *, session_id=None, model=None, timeout=60)` — Motor passes all three kwargs; old-style `fake_llm(prompt, timeout=60)` raises `TypeError`.
+- **Session-based delta prompting**: each Motor gets a unique UUID `session_id` per `circuit.run()` call (injected by engine bootstrap). On iter 1, Motor sends full prompt. On iter 2+, if `session_id` is set and sections changed, sends delta prompt (only changed `[CONTEXT]`/`[PEER OUTPUTS]`/`[FEEDBACK]` sections) to the same session. Fail-soft: on delta send failure, retries with full prompt.
+- **Empty-input guard**: Motor skips LLM call and returns `Signal.ZERO` if all input roles have no non-zero content. Prevents wasted calls when a Motor wakes before upstream nodes have fired.
+- **Per-motor model selection**: add optional `"model"` field to Motor JSON config. Maps to `claude --model <name>`. Unset = CLI default. Use `"haiku"` for low-stakes nodes (~10x cheaper). Security/synthesis nodes should stay on default (Sonnet/Opus).
+- **Token tracking**: `RunResult` now has `total_tokens_in`, `total_tokens_out`, `total_cost_usd`, `per_motor_usage` (dict of node_id → list of per-call entries). CLI emits `[cost tokens_in=N tokens_out=M cost_usd=$X.XX]` after convergence line. `parse_cirkit_line` handles `[cost ...]` → `{type:"cost", ...}`.
+- **MOTOR_PREFIX trimmed**: ~250 tokens → ~120 tokens. Same rules, more compact. Risk: subtle behavior shifts. If motor quality degrades, compare against git history.
+- **Phase 2 (deferred)**: drop CLI subprocess, switch to `anthropic.Anthropic().messages.create()` with `cache_control: {type: "ephemeral"}` on prefix + system. Targets 70-80% savings via server-side prompt cache. Requires API key, async, separate plan.
 
 ## Read tool quirk
 After writing files, use `Bash cat` to read externally-modified versions — `Read` tool returns stale content after a `Write`.

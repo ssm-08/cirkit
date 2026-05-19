@@ -21,18 +21,12 @@ def test_content_hash_known_value():
     assert s.content_hash() == expected
 
 
-def test_zero_sentinel_content():
+def test_zero_sentinel():
     assert Signal.ZERO.content == ""
-
-
-def test_zero_sentinel_metrics():
     assert Signal.ZERO.confidence == 0.0
     assert Signal.ZERO.contradiction == 0.0
     assert Signal.ZERO.urgency == 0.0
     assert Signal.ZERO.relevance == 0.0
-
-
-def test_zero_sentinel_flags():
     assert Signal.ZERO.flags == {}
 
 
